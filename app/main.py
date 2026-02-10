@@ -612,13 +612,18 @@ async def upload_csv(
             raise HTTPException(status_code=400, detail=f"Missing column: {col}")
 
     # 清除空行並處理 NaN
-    df = df.dropna(subset=["活動名", "信箱", "報名者姓名"]) # 核心必填項
+    # 更嚴格的過濾：排除包含 "nan" 字串的關鍵欄位
+    df = df.dropna(subset=["活動名", "信箱", "報名者姓名"])
     
     import math
     def clean_val(val, default=""):
+        if val is None: return default
         if isinstance(val, float) and math.isnan(val):
             return default
-        return str(val).strip()
+        s = str(val).strip()
+        if s.lower() == "nan" or s == "":
+            return default
+        return s
 
     count = 0
     for _, row in df.iterrows():
@@ -627,11 +632,14 @@ async def upload_csv(
             event_name = clean_val(row["活動名"])
             if not event_name: continue
             
+            event_date_raw = row["活動日期"]
+            event_date = pd.to_datetime(event_date_raw) if not pd.isna(event_date_raw) else datetime.datetime.utcnow()
+
             event = db.query(models.Event).filter(models.Event.name == event_name).first()
             if not event:
                 event = models.Event(
                     name=event_name,
-                    date=pd.to_datetime(row["活動日期"]) if not pd.isna(row["活動日期"]) else datetime.datetime.utcnow(),
+                    date=event_date,
                     amount=float(row["金額"]) if not pd.isna(row["金額"]) else 0.0,
                     description=clean_val(row["活動簡介"])
                 )
@@ -641,7 +649,7 @@ async def upload_csv(
 
             # 2. 處理使用者 (確保 User 資料表有紀錄)
             user_email = clean_val(row["信箱"])
-            if not user_email: continue
+            if not user_email or user_email.lower() == "nan": continue
             
             user_record = db.query(models.User).filter(models.User.email == user_email).first()
             if not user_record:
@@ -654,7 +662,6 @@ async def upload_csv(
                 db.commit()
 
             # 3. 處理報名資料
-            # 避免重複匯入同一場活動的同一個人 (選配)
             existing_reg = db.query(models.Registration).filter(
                 models.Registration.event_id == event.id,
                 models.Registration.email == user_email
@@ -670,14 +677,33 @@ async def upload_csv(
                     registration_date=pd.to_datetime(row["報名日期"]) if not pd.isna(row["報名日期"]) else datetime.datetime.utcnow()
                 )
                 db.add(registration)
-                db.commit() # 每一筆都 commit 確保入庫
+                db.commit()
                 count += 1
         except Exception as e:
             db.rollback()
             print(f"Error importing row: {e}")
-            continue # 跳過錯誤行
+            continue
     
     return {"message": f"Successfully imported {count} records"}
+
+# --- Users Admin CRUD ---
+
+@app.delete("/admin/users/{email}")
+def delete_user(
+    email: str,
+    db: Session = Depends(get_db),
+    admin_user: str = Depends(auth.get_current_admin)
+):
+    user = db.query(models.User).filter(models.User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="找不到該成員")
+    
+    # 刪除關聯的報名紀錄
+    db.query(models.Registration).filter(models.Registration.email == email).delete()
+    db.delete(user)
+    db.commit()
+    return {"message": "成員及其報名資料已刪除"}
+
 
 # --- Events Admin CRUD ---
 

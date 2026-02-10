@@ -373,6 +373,20 @@ function App() {
     }
   };
 
+  const deleteUser = async (email) => {
+    if (!window.confirm(`確定要刪除成員 ${email} 及其所有報名紀錄嗎？`)) return;
+    try {
+      await axios.delete(`${API_BASE}/admin/users/${email}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      alert("成員已刪除");
+      fetchMemberStats();
+      fetchEvents(); // 重新獲取可能受影響的活動報名人數
+    } catch (err) {
+      alert("刪除成員失敗");
+    }
+  };
+
   const fetchMarketingMails = async () => {
     try {
       const res = await axios.get(`${API_BASE}/admin/marketing-mails`, {
@@ -749,19 +763,30 @@ function App() {
                           </div>
                           <p className={`text-sm ${isAdminView ? 'text-[#A0A095]' : 'text-[#4A4A4A]/40'} font-mono mt-1`}>{member.email} • {member.birthday || '未填寫生日'}</p>
                         </div>
-                        <button
-                          onClick={() => toggleVipStatus(member.email, member.is_vip)}
-                          className={`p-4 rounded-2xl transition-all shadow-sm ${member.is_vip === 1 ? 'bg-pink-500 text-white' : (isAdminView ? 'bg-[#1A1A17] text-[#A0A095]' : 'bg-gray-50 text-[#4A4A4A]/20')}`}
-                          title={member.is_vip === 1 ? "取消好顧客標記" : "標記為好顧客"}
-                        >
-                          <Heart size={20} fill={member.is_vip === 1 ? "currentColor" : "none"} />
-                        </button>
-                        <button
-                          onClick={() => setExpandedMember(expandedMember === member.email ? null : member.email)}
-                          className={`p-4 rounded-2xl transition-all ${expandedMember === member.email ? (isAdminView ? 'bg-[#F5F5F0] text-[#1A1A17]' : 'bg-[#4A4A4A] text-white') : (isAdminView ? 'bg-[#1A1A17] text-[#A0A095]' : 'bg-gray-50 text-[#4A4A4A]/20 hover:text-[#4A4A4A]')} rotate-90`}
-                        >
-                          <ChevronRight size={24} className={`${expandedMember === member.email ? '' : '-rotate-90'}`} />
-                        </button>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => toggleVipStatus(member.email, member.is_vip)}
+                            className={`p-4 rounded-2xl transition-all shadow-sm ${member.is_vip === 1 ? 'bg-pink-500 text-white' : (isAdminView ? 'bg-[#1A1A17] text-[#A0A095]' : 'bg-gray-50 text-[#4A4A4A]/20')}`}
+                            title={member.is_vip === 1 ? "取消好顧客標記" : "標記為好顧客"}
+                          >
+                            <Heart size={20} fill={member.is_vip === 1 ? "currentColor" : "none"} />
+                          </button>
+                          {isAdmin && (
+                            <button
+                              onClick={() => deleteUser(member.email)}
+                              className={`p-4 rounded-2xl transition-all shadow-sm ${isAdminView ? 'bg-[#1A1A17] text-red-500 hover:bg-red-500 hover:text-white' : 'bg-gray-50 text-[#4A4A4A]/20 hover:bg-red-50 hover:text-red-500'}`}
+                              title="刪除此成員資料"
+                            >
+                              <Trash2 size={20} />
+                            </button>
+                          )}
+                          <button
+                            onClick={() => setExpandedMember(expandedMember === member.email ? null : member.email)}
+                            className={`p-4 rounded-2xl transition-all ${expandedMember === member.email ? (isAdminView ? 'bg-[#F5F5F0] text-[#1A1A17]' : 'bg-[#4A4A4A] text-white') : (isAdminView ? 'bg-[#1A1A17] text-[#A0A095]' : 'bg-gray-50 text-[#4A4A4A]/20 hover:text-[#4A4A4A]')} rotate-90`}
+                          >
+                            <ChevronRight size={24} className={`${expandedMember === member.email ? '' : '-rotate-90'}`} />
+                          </button>
+                        </div>
                       </div>
 
                       <AnimatePresence>
@@ -774,7 +799,7 @@ function App() {
                                   <div key={idx} className={`${isAdminView ? 'bg-[#242421] border-[#363632]' : 'bg-white border-[#D2B48C]/10'} p-5 rounded-[24px] border shadow-sm`}>
                                     <h4 className={`font-bold ${isAdminView ? 'text-[#F5F5F0]' : 'text-[#4A4A4A]'} leading-tight mb-3 line-clamp-1`}>{reg.event_name}</h4>
                                     <div className="flex justify-between items-center">
-                                      <span className={`text-[10px] px-2 py-1 rounded-full font-bold ${reg.payment_status === '已付款' ? 'bg-[#8FBC8F]/10 text-[#8FBC8F]' : 'bg-[#B87333]/10 text-[#8FBC8F]/10'
+                                      <span className={`text-[10px] px-2 py-1 rounded-full font-bold ${reg.payment_status === '已付款' ? 'bg-[#8FBC8F]/10 text-[#8FBC8F]' : 'bg-[#B87333]/10 text-[#B87333]'
                                         }`}>{reg.payment_status}</span>
                                       <span className={`text-[10px] ${isAdminView ? 'text-[#A0A095]' : 'text-[#4A4A4A]/40'} font-bold`}>{new Date(reg.registration_date).toLocaleDateString()}</span>
                                     </div>
