@@ -1,5 +1,9 @@
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+import os
+from pathlib import Path
 from sqlalchemy.orm import Session
 from typing import List
 import pandas as pd
@@ -920,3 +924,17 @@ def delete_marketing_mail(
     db.delete(mail)
     db.commit()
     return {"message": "狀態已更新"}
+
+# === 前端靜態檔案服務 (單服務部署模式) ===
+frontend_dist = Path(__file__).parent.parent / "frontend" / "dist"
+if frontend_dist.exists():
+    # 掛載靜態資源 (JS, CSS, images)
+    app.mount("/assets", StaticFiles(directory=str(frontend_dist / "assets")), name="static-assets")
+
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        """SPA catch-all: 所有非 API 路由都返回 index.html"""
+        file_path = frontend_dist / full_path
+        if file_path.exists() and file_path.is_file():
+            return FileResponse(str(file_path))
+        return FileResponse(str(frontend_dist / "index.html"))

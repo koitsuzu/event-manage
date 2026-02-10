@@ -75,27 +75,27 @@
    - 前端：http://localhost:5173
    - API 文件：http://localhost:8000/docs
 
-### 方式二：Zeabur 雲端部署
+### 方式二：Zeabur 雲端部署（單服務模式）
+
+本專案已整合為**單一服務**：後端自動提供前端頁面，只需部署一個服務即可。
 
 1. **建立 PostgreSQL 服務**：在 Zeabur 專案中新增 PostgreSQL 資料庫
-2. **連結 GitHub Repo**：從 `cloud-deploy` 分支部署後端
-3. **設定環境變數**：在 Zeabur Dashboard 設定以下變數：
+2. **連結 GitHub Repo**：選擇 `cloud-deploy` 分支，Zeabur 會自動偵測 Python 專案
+3. **綁定 PostgreSQL**：將 PostgreSQL 服務綁定至後端，`DATABASE_URL` 會自動注入
+4. **設定環境變數**：
 
 | 變數名稱 | 說明 |
 |----------|------|
-| `DATABASE_URL` | Zeabur 自動注入（綁定 PostgreSQL 後） |
 | `GOOGLE_CLIENT_ID` | Google OAuth Client ID |
 | `GOOGLE_CLIENT_SECRET` | Google OAuth Client Secret |
-| `GOOGLE_CALLBACK_URL` | `https://your-backend.zeabur.app/auth/callback` |
+| `GOOGLE_CALLBACK_URL` | `https://your-app.zeabur.app/auth/callback` |
 | `JWT_SECRET` | 自訂密鑰 |
-| `FRONTEND_URL` | 前端部署 URL（用於 CORS） |
+| `FRONTEND_URL` | 您的 Zeabur 部署 URL |
 | `MAIL_USERNAME` | Gmail 帳號 |
 | `MAIL_PASSWORD` | Gmail 應用程式密碼 |
 | `ADMIN_EMAILS` | 管理員信箱（逗號分隔） |
 
-4. **部署前端**：另建一個 Zeabur 服務，連結同 Repo 的 `frontend/` 目錄，並設定環境變數 `VITE_API_BASE` 指向後端 URL
-
-> ⚠️ 記得在 Google Cloud Console 中，將 Zeabur 的後端 URL 加入 OAuth 授權重新導向 URI。
+5. **設定 Google OAuth**：前往 [Google Cloud Console](https://console.cloud.google.com/) → API 和服務 → 憑證 → 您的 OAuth Client ID → 在「已授權的重新導向 URI」新增 `https://your-app.zeabur.app/auth/callback`
 
 ---
 

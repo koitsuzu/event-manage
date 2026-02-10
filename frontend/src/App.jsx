@@ -3,7 +3,7 @@ import axios from 'axios';
 import { Heart, Upload, LogIn, CheckCircle, Clock, XCircle, FileText, Calendar, Plus, Minus, ChevronRight, User, PenTool, LogOut, Info, Mail, Gift, Settings, BarChart2, Users, History, Activity, TrendingUp, Award, Sparkles, Compass, Bell, Megaphone, Trash2, Edit3, MessageSquare } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
+const API_BASE = import.meta.env.VITE_API_BASE || "";
 
 function App() {
   const [currentUserProfile, setCurrentUserProfile] = useState(null);
