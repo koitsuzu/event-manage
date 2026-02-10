@@ -56,8 +56,19 @@ function App() {
       if (target) {
         setSelectedEvent(target);
         if (isAdmin) fetchAdminRegistrations(target.id);
-        // 清除 URL 參數避免重複觸發
-        // window.history.replaceState({}, document.title, "/");
+
+        // 檢查是否有登入後待處理的報名
+        const pendingEventId = sessionStorage.getItem('pending_registration_event_id');
+        if (pendingEventId && parseInt(pendingEventId) === target.id && token) {
+          setRegFormData({
+            user_name: currentUserProfile?.display_name || '',
+            birthday: currentUserProfile?.birthday || '',
+            participant_count: 1,
+            notes: ''
+          });
+          setShowRegForm(true);
+          sessionStorage.removeItem('pending_registration_event_id');
+        }
       }
     }
 
@@ -73,7 +84,10 @@ function App() {
     }
   }, [token, isAdmin, events.length]); // 加入 events.length 確保資料載入後才解析參數
 
-  const handleLogin = async () => {
+  const handleLogin = async (eventId = null) => {
+    if (eventId) {
+      sessionStorage.setItem('pending_registration_event_id', eventId);
+    }
     const res = await axios.get(`${API_BASE}/auth/login-url`);
     window.location.href = res.data.url;
   };
@@ -96,7 +110,14 @@ function App() {
       setToken(res.data.access_token);
       setIsAdmin(res.data.is_admin);
       setCurrentUserProfile(res.data.user);
-      window.history.replaceState({}, document.title, "/");
+
+      // 如果有待處理的報名，確保選取該活動
+      const pendingEventId = sessionStorage.getItem('pending_registration_event_id');
+      if (pendingEventId) {
+        window.history.replaceState({}, document.title, `/?event=${pendingEventId}`);
+      } else {
+        window.history.replaceState({}, document.title, "/");
+      }
     } catch (err) {
       console.error("Login failed", err);
     }
@@ -971,7 +992,7 @@ function App() {
                           ) : (
                             <button
                               onClick={() => {
-                                if (!token) return handleLogin();
+                                if (!token) return handleLogin(selectedEvent.id);
                                 setRegFormData({
                                   user_name: currentUserProfile?.display_name || '',
                                   birthday: currentUserProfile?.birthday || '',
