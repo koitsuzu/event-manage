@@ -62,30 +62,40 @@
 
 ---
 
-## 🚀 安裝與執行
+## 🚀 部署方式
 
-### 1. 環境設定
-請確保專案根目錄下有 `.env` 檔案，並設定以下關鍵變數：
-```env
-# Google OAuth
-GOOGLE_CLIENT_ID=...
-GOOGLE_CLIENT_SECRET=...
+### 方式一：本機開發
 
-# Email Server
-MAIL_USERNAME=...
-MAIL_PASSWORD=...
-ADMIN_EMAILS=admin1@example.com,admin2@example.com
-```
-
-### 2. 啟動系統
-使用 PowerShell 執行自動化腳本，將同時啟動後端與前端：
+1. 複製 `.env.example` 為 `.env`，填入您的 Google OAuth 與郵件設定
+2. 啟動系統：
 ```powershell
 .\run.ps1
 ```
+3. 訪問應用：
+   - 前端：http://localhost:5173
+   - API 文件：http://localhost:8000/docs
 
-### 3. 訪問應用
-- 前端入口：http://localhost:5174
-- API 文件：http://localhost:8000/docs
+### 方式二：Zeabur 雲端部署
+
+1. **建立 PostgreSQL 服務**：在 Zeabur 專案中新增 PostgreSQL 資料庫
+2. **連結 GitHub Repo**：從 `cloud-deploy` 分支部署後端
+3. **設定環境變數**：在 Zeabur Dashboard 設定以下變數：
+
+| 變數名稱 | 說明 |
+|----------|------|
+| `DATABASE_URL` | Zeabur 自動注入（綁定 PostgreSQL 後） |
+| `GOOGLE_CLIENT_ID` | Google OAuth Client ID |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth Client Secret |
+| `GOOGLE_CALLBACK_URL` | `https://your-backend.zeabur.app/auth/callback` |
+| `JWT_SECRET` | 自訂密鑰 |
+| `FRONTEND_URL` | 前端部署 URL（用於 CORS） |
+| `MAIL_USERNAME` | Gmail 帳號 |
+| `MAIL_PASSWORD` | Gmail 應用程式密碼 |
+| `ADMIN_EMAILS` | 管理員信箱（逗號分隔） |
+
+4. **部署前端**：另建一個 Zeabur 服務，連結同 Repo 的 `frontend/` 目錄，並設定環境變數 `VITE_API_BASE` 指向後端 URL
+
+> ⚠️ 記得在 Google Cloud Console 中，將 Zeabur 的後端 URL 加入 OAuth 授權重新導向 URI。
 
 ---
 
@@ -97,3 +107,4 @@ ADMIN_EMAILS=admin1@example.com,admin2@example.com
    - 測試建立新活動（檢查是否收到 VIP 通知）。
    - 進入「成員統計」查看數據。
    - 設定一行銷郵件排程並等待自動發送。
+

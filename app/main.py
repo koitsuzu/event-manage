@@ -21,10 +21,11 @@ models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="活動管理系統 API")
 
-# CORS 設定
+# CORS 設定 (支援多來源：本機 + 雲端)
+allowed_origins = [url.strip() for url in settings.FRONTEND_URL.split(",") if url.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.FRONTEND_URL],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
