@@ -957,9 +957,16 @@ def delete_marketing_mail(
 
 # === 前端靜態檔案服務 (單服務部署模式) ===
 frontend_dist = Path(__file__).parent.parent / "frontend" / "dist"
+print(f"DEBUG: Checking frontend dist at: {frontend_dist.absolute()}", flush=True)
+
 if frontend_dist.exists():
     # 掛載靜態資源 (JS, CSS, images)
-    app.mount("/assets", StaticFiles(directory=str(frontend_dist / "assets")), name="static-assets")
+    assets_path = frontend_dist / "assets"
+    if assets_path.exists() and assets_path.is_dir():
+        print(f"DEBUG: Mounting static assets from: {assets_path.absolute()}", flush=True)
+        app.mount("/assets", StaticFiles(directory=str(assets_path)), name="static-assets")
+    else:
+        print(f"WARNING: Assets directory NOT found at {assets_path.absolute()}", flush=True)
 
     @app.get("/{full_path:path}")
     async def serve_spa(full_path: str):
