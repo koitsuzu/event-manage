@@ -1,0 +1,26 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=Noto+Serif+TC:wght@400;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-market-cream text-market-charcoal font-sans;
+  background-image: url("https://www.transparenttextures.com/patterns/natural-paper.png");
+}
+
+.card-market {
+  @apply bg-white rounded-2xl shadow-sm border border-market-wood/20 overflow-hidden transition-all duration-300 hover:shadow-md;
+}
+
+.btn-market {
+  @apply px-4 py-2 rounded-full font-medium transition-all duration-200 active:scale-95;
+}
+
+.btn-primary-market {
+  @apply btn-market bg-market-green text-white hover:bg-market-green/90 shadow-sm;
+}
+
+.btn-secondary-market {
+  @apply btn-market bg-market-wood text-white hover:bg-market-wood/90 shadow-sm;
+}
