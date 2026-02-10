@@ -611,9 +611,8 @@ async def upload_csv(
         if col not in df.columns:
             raise HTTPException(status_code=400, detail=f"Missing column: {col}")
 
-    # 清除空行並處理 NaN
-    # 更嚴格的過濾：排除包含 "nan" 字串的關鍵欄位
-    df = df.dropna(subset=["活動名", "信箱", "報名者姓名"])
+    # 清除空行：只要有「活動名」就保留該行（支援僅匯入活動）
+    df = df.dropna(subset=["活動名"])
     
     import math
     def clean_val(val, default=""):
@@ -647,15 +646,20 @@ async def upload_csv(
                 db.commit()
                 db.refresh(event)
 
-            # 2. 處理使用者 (確保 User 資料表有紀錄)
+            # 2. 處理使用者 (如有則處理)
             user_email = clean_val(row["信箱"])
-            if not user_email or user_email.lower() == "nan": continue
+            user_display_name = clean_val(row["報名者姓名"])
+            
+            # 如果沒有信箱或姓名，視為僅匯入活動資訊，跳過報名部分
+            if not user_email or not user_display_name:
+                count += 1
+                continue
             
             user_record = db.query(models.User).filter(models.User.email == user_email).first()
             if not user_record:
                 user_record = models.User(
                     email=user_email,
-                    display_name=clean_val(row["報名者姓名"]),
+                    display_name=user_display_name,
                     birthday=clean_val(row["生日"])
                 )
                 db.add(user_record)
@@ -670,7 +674,7 @@ async def upload_csv(
             if not existing_reg:
                 registration = models.Registration(
                     event_id=event.id,
-                    user_name=clean_val(row["報名者姓名"]),
+                    user_name=user_display_name,
                     birthday=clean_val(row["生日"]),
                     email=user_email,
                     payment_status=clean_val(row["付款狀態"], "待付款"),
@@ -678,13 +682,13 @@ async def upload_csv(
                 )
                 db.add(registration)
                 db.commit()
-                count += 1
+            count += 1
         except Exception as e:
             db.rollback()
             print(f"Error importing row: {e}")
             continue
     
-    return {"message": f"Successfully imported {count} records"}
+    return {"message": f"Successfully imported {count} items"}
 
 # --- Users Admin CRUD ---
 
