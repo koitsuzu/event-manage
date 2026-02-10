@@ -1088,17 +1088,17 @@ function App() {
                 <div className="grid grid-cols-2 gap-6">
                   <div className="space-y-2 col-span-1">
                     <label className={`text-[10px] font-black uppercase tracking-widest ml-2 ${isAdminView ? 'text-[#A0A095]' : 'text-[#4A4A4A]/40'}`}>發佈日期</label>
-                    <input type="date" value={annFormData.date} required className={`w-full px-6 py-4 rounded-[24px] border-2 border-transparent focus:outline-none focus:bg-white transition-all font-bold font-mono ${isAdminView ? 'bg-[#1A1A17] text-[#F5F5F0] focus:border-stone-700' : 'bg-gray-50 focus:border-indigo-500/20'}`} onChange={e => setAnnFormData({ ...annFormData, date: e.target.value })} />
+                    <input type="date" value={annFormData.date} required className={`w-full px-6 py-4 rounded-[24px] border-2 border-transparent focus:outline-none focus:bg-white transition-all font-bold font-mono ${isAdminView ? 'bg-[#1A1A17] text-[#F5F5F0] focus:border-stone-700 focus:text-black' : 'bg-gray-50 focus:border-indigo-500/20'}`} onChange={e => setAnnFormData({ ...annFormData, date: e.target.value })} />
                   </div>
                   <div className="space-y-2 col-span-2">
                     <label className={`text-[10px] font-black uppercase tracking-widest ml-2 ${isAdminView ? 'text-[#A0A095]' : 'text-[#4A4A4A]/40'}`}>公告標題</label>
-                    <input type="text" placeholder="輸入亮眼的標題..." value={annFormData.title} required className={`w-full px-8 py-4 rounded-[24px] border-2 border-transparent focus:outline-none focus:bg-white transition-all font-bold ${isAdminView ? 'bg-[#1A1A17] text-[#F5F5F0] focus:border-stone-700' : 'bg-gray-50 focus:border-indigo-500/20'}`} onChange={e => setAnnFormData({ ...annFormData, title: e.target.value })} />
+                    <input type="text" placeholder="輸入亮眼的標題..." value={annFormData.title} required className={`w-full px-8 py-4 rounded-[24px] border-2 border-transparent focus:outline-none focus:bg-white transition-all font-bold ${isAdminView ? 'bg-[#1A1A17] text-[#F5F5F0] focus:border-stone-700 focus:text-black' : 'bg-gray-50 focus:border-indigo-500/20'}`} onChange={e => setAnnFormData({ ...annFormData, title: e.target.value })} />
                   </div>
                   <div className="space-y-2 col-span-2">
                     <label className={`text-[10px] font-black uppercase tracking-widest ml-2 ${isAdminView ? 'text-[#A0A095]' : 'text-[#4A4A4A]/40'}`}>連結至特定活動 (可選)</label>
                     <select
                       value={annFormData.event_link_id || ''}
-                      className={`w-full px-8 py-4 rounded-[24px] border-2 border-transparent focus:outline-none focus:bg-white transition-all font-bold ${isAdminView ? 'bg-[#1A1A17] text-[#F5F5F0] focus:border-stone-700' : 'bg-gray-50 focus:border-indigo-500/20'}`}
+                      className={`w-full px-8 py-4 rounded-[24px] border-2 border-transparent focus:outline-none focus:bg-white transition-all font-bold ${isAdminView ? 'bg-[#1A1A17] text-[#F5F5F0] focus:border-stone-700 focus:text-black' : 'bg-gray-50 focus:border-indigo-500/20'}`}
                       onChange={e => setAnnFormData({ ...annFormData, event_link_id: e.target.value || null })}
                     >
                       <option value="">無連結</option>
@@ -1110,7 +1110,7 @@ function App() {
                 </div>
                 <div className="space-y-2">
                   <label className={`text-[10px] font-black uppercase tracking-widest ml-2 ${isAdminView ? 'text-[#A0A095]' : 'text-[#4A4A4A]/40'}`}>詳細內容</label>
-                  <textarea rows={8} placeholder="描述公告詳情..." value={annFormData.content} required className={`w-full px-8 py-6 rounded-[32px] border-2 border-transparent focus:outline-none focus:bg-white transition-all font-bold resize-none ${isAdminView ? 'bg-[#1A1A17] text-[#F5F5F0] focus:border-stone-700' : 'bg-gray-50 focus:border-indigo-500/20'}`} onChange={e => setAnnFormData({ ...annFormData, content: e.target.value })} />
+                  <textarea rows={8} placeholder="描述公告詳情..." value={annFormData.content} required className={`w-full px-8 py-6 rounded-[32px] border-2 border-transparent focus:outline-none focus:bg-white transition-all font-bold resize-none ${isAdminView ? 'bg-[#1A1A17] text-[#F5F5F0] focus:border-stone-700 focus:text-black' : 'bg-gray-50 focus:border-indigo-500/20'}`} onChange={e => setAnnFormData({ ...annFormData, content: e.target.value })} />
                 </div>
                 <div className="flex gap-4 pt-6">
                   <button type="button" onClick={() => setShowAnnForm(false)} className={`flex-1 py-4 font-bold rounded-2xl transition-colors ${isAdminView ? 'text-[#A0A095] hover:bg-[#1A1A17]' : 'text-[#4A4A4A]/40 hover:bg-gray-50'}`}>取消</button>
@@ -1135,15 +1135,15 @@ function App() {
                 <div className="grid grid-cols-2 gap-6">
                   <div className="space-y-2 col-span-2">
                     <label className={`text-[10px] font-black uppercase tracking-widest ml-2 ${isAdminView ? 'text-[#A0A095]' : 'text-[#4A4A4A]/40'}`}>活動名稱</label>
-                    <input type="text" placeholder="輸入活動名稱..." value={eventFormData.name} required className={`w-full px-8 py-4 rounded-[24px] border-2 border-transparent focus:outline-none focus:bg-white transition-all font-bold ${isAdminView ? 'bg-[#1A1A17] text-[#F5F5F0] focus:border-stone-700' : 'bg-gray-50 focus:border-indigo-500/20'}`} onChange={e => setEventFormData({ ...eventFormData, name: e.target.value })} />
+                    <input type="text" placeholder="輸入活動名稱..." value={eventFormData.name} required className={`w-full px-8 py-4 rounded-[24px] border-2 border-transparent focus:outline-none focus:bg-white transition-all font-bold ${isAdminView ? 'bg-[#1A1A17] text-[#F5F5F0] focus:border-stone-700 focus:text-black' : 'bg-gray-50 focus:border-indigo-500/20'}`} onChange={e => setEventFormData({ ...eventFormData, name: e.target.value })} />
                   </div>
                   <div className="space-y-2 col-span-1">
                     <label className={`text-[10px] font-black uppercase tracking-widest ml-2 ${isAdminView ? 'text-[#A0A095]' : 'text-[#4A4A4A]/40'}`}>活動日期與時間</label>
-                    <input type="datetime-local" value={eventFormData.date} required className={`w-full px-6 py-4 rounded-[24px] border-2 border-transparent focus:outline-none focus:bg-white transition-all font-bold font-mono ${isAdminView ? 'bg-[#1A1A17] text-[#F5F5F0] focus:border-stone-700' : 'bg-gray-50 focus:border-indigo-500/20'}`} onChange={e => setEventFormData({ ...eventFormData, date: e.target.value })} />
+                    <input type="datetime-local" value={eventFormData.date} required className={`w-full px-6 py-4 rounded-[24px] border-2 border-transparent focus:outline-none focus:bg-white transition-all font-bold font-mono ${isAdminView ? 'bg-[#1A1A17] text-[#F5F5F0] focus:border-stone-700 focus:text-black' : 'bg-gray-50 focus:border-indigo-500/20'}`} onChange={e => setEventFormData({ ...eventFormData, date: e.target.value })} />
                   </div>
                   <div className="space-y-2 col-span-1">
                     <label className={`text-[10px] font-black uppercase tracking-widest ml-2 ${isAdminView ? 'text-[#A0A095]' : 'text-[#4A4A4A]/40'}`}>報名費用 (TWD)</label>
-                    <input type="number" placeholder="0" value={eventFormData.amount} required className={`w-full px-8 py-4 rounded-[24px] border-2 border-transparent focus:outline-none focus:bg-white transition-all font-bold ${isAdminView ? 'bg-[#1A1A17] text-[#F5F5F0] focus:border-stone-700' : 'bg-gray-50 focus:border-indigo-500/20'}`} onChange={e => setEventFormData({ ...eventFormData, amount: parseFloat(e.target.value) })} />
+                    <input type="number" placeholder="0" value={eventFormData.amount} required className={`w-full px-8 py-4 rounded-[24px] border-2 border-transparent focus:outline-none focus:bg-white transition-all font-bold ${isAdminView ? 'bg-[#1A1A17] text-[#F5F5F0] focus:border-stone-700 focus:text-black' : 'bg-gray-50 focus:border-indigo-500/20'}`} onChange={e => setEventFormData({ ...eventFormData, amount: parseFloat(e.target.value) })} />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
@@ -1152,7 +1152,7 @@ function App() {
                     <input
                       type="date"
                       value={eventFormData.reminder_date}
-                      className={`w-full px-8 py-4 rounded-[24px] border-2 border-transparent focus:outline-none focus:bg-white transition-all font-bold ${isAdminView ? 'bg-[#1A1A17] text-[#F5F5F0] focus:border-stone-700' : 'bg-gray-50 focus:border-indigo-500/20'}`}
+                      className={`w-full px-8 py-4 rounded-[24px] border-2 border-transparent focus:outline-none focus:bg-white transition-all font-bold ${isAdminView ? 'bg-[#1A1A17] text-[#F5F5F0] focus:border-stone-700 focus:text-black' : 'bg-gray-50 focus:border-indigo-500/20'}`}
                       onChange={e => setEventFormData({ ...eventFormData, reminder_date: e.target.value })}
                     />
                   </div>
@@ -1161,14 +1161,14 @@ function App() {
                     <input
                       type="date"
                       value={eventFormData.reminder_deadline}
-                      className={`w-full px-8 py-4 rounded-[24px] border-2 border-transparent focus:outline-none focus:bg-white transition-all font-bold ${isAdminView ? 'bg-[#1A1A17] text-[#F5F5F0] focus:border-stone-700' : 'bg-gray-50 focus:border-indigo-500/20'}`}
+                      className={`w-full px-8 py-4 rounded-[24px] border-2 border-transparent focus:outline-none focus:bg-white transition-all font-bold ${isAdminView ? 'bg-[#1A1A17] text-[#F5F5F0] focus:border-stone-700 focus:text-black' : 'bg-gray-50 focus:border-indigo-500/20'}`}
                       onChange={e => setEventFormData({ ...eventFormData, reminder_deadline: e.target.value })}
                     />
                   </div>
                 </div>
                 <div className="space-y-2">
                   <label className={`text-[10px] font-black uppercase tracking-widest ml-2 ${isAdminView ? 'text-[#A0A095]' : 'text-[#4A4A4A]/40'}`}>活動介紹</label>
-                  <textarea rows={6} placeholder="描述活動詳情..." value={eventFormData.description} className={`w-full px-8 py-6 rounded-[32px] border-2 border-transparent focus:outline-none focus:bg-white transition-all font-bold resize-none ${isAdminView ? 'bg-[#1A1A17] text-[#F5F5F0] focus:border-stone-700' : 'bg-gray-50 focus:border-indigo-500/20'}`} onChange={e => setEventFormData({ ...eventFormData, description: e.target.value })} />
+                  <textarea rows={6} placeholder="描述活動詳情..." value={eventFormData.description} className={`w-full px-8 py-6 rounded-[32px] border-2 border-transparent focus:outline-none focus:bg-white transition-all font-bold resize-none ${isAdminView ? 'bg-[#1A1A17] text-[#F5F5F0] focus:border-stone-700 focus:text-black' : 'bg-gray-50 focus:border-indigo-500/20'}`} onChange={e => setEventFormData({ ...eventFormData, description: e.target.value })} />
                 </div>
                 <div className="flex gap-4 pt-6">
                   <button type="button" onClick={() => setShowEventForm(false)} className={`flex-1 py-4 font-bold rounded-2xl transition-colors ${isAdminView ? 'text-[#A0A095] hover:bg-[#1A1A17]' : 'text-[#4A4A4A]/40 hover:bg-gray-50'}`}>取消</button>

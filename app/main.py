@@ -599,55 +599,85 @@ async def upload_csv(
         raise HTTPException(status_code=400, detail="Only CSV files are allowed")
     
     content = await file.read()
-    df = pd.read_csv(io.BytesIO(content))
+    try:
+        df = pd.read_csv(io.BytesIO(content))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to parse CSV: {str(e)}")
     
-    # 欄位對應: 活動名, 活動日期, 金額, 活動簡介, 報名者姓名, 生日, 信箱, 付款狀態, 報名日期
+    # 必填欄位對應: 活動名, 活動日期, 金額, 活動簡介, 報名者姓名, 生日, 信箱, 付款狀態, 報名日期
+    # 雖是必填，但我們會嘗試提供預設值以防 CSV 資料不完整
     required_cols = ["活動名", "活動日期", "金額", "活動簡介", "報名者姓名", "生日", "信箱", "付款狀態", "報名日期"]
     for col in required_cols:
         if col not in df.columns:
             raise HTTPException(status_code=400, detail=f"Missing column: {col}")
 
-    for _, row in df.iterrows():
-        # 1. 處理活動 (如果活動不存在則建立)
-        event_name = str(row["活動名"])
-        event = db.query(models.Event).filter(models.Event.name == event_name).first()
-        if not event:
-            event = models.Event(
-                name=event_name,
-                date=pd.to_datetime(row["活動日期"]),
-                amount=float(row["金額"]),
-                description=str(row["活動簡介"])
-            )
-            db.add(event)
-            db.commit()
-            db.refresh(event)
-
-        # 2. 處理使用者 (確保 User 資料表有紀錄，因為 Registration.email 是 FK)
-        user_email = str(row["信箱"])
-        user_record = db.query(models.User).filter(models.User.email == user_email).first()
-        if not user_record:
-            user_record = models.User(
-                email=user_email,
-                display_name=str(row["報名者姓名"]),
-                birthday=str(row["生日"])
-            )
-            db.add(user_record)
-            db.commit()
-
-        # 3. 處理報名資料
-        registration = models.Registration(
-            event_id=event.id,
-            user_name=str(row["報名者姓名"]),
-            birthday=str(row["生日"]),
-            email=user_email,
-            payment_status=str(row["付款狀態"]),
-            registration_date=pd.to_datetime(row["報名日期"])
-        )
-        db.add(registration)
+    # 清除空行並處理 NaN
+    df = df.dropna(subset=["活動名", "信箱", "報名者姓名"]) # 核心必填項
     
-    db.commit()
-    db.commit()
-    return {"message": f"Successfully imported {len(df)} records"}
+    import math
+    def clean_val(val, default=""):
+        if isinstance(val, float) and math.isnan(val):
+            return default
+        return str(val).strip()
+
+    count = 0
+    for _, row in df.iterrows():
+        try:
+            # 1. 處理活動 (如果活動不存在則建立)
+            event_name = clean_val(row["活動名"])
+            if not event_name: continue
+            
+            event = db.query(models.Event).filter(models.Event.name == event_name).first()
+            if not event:
+                event = models.Event(
+                    name=event_name,
+                    date=pd.to_datetime(row["活動日期"]) if not pd.isna(row["活動日期"]) else datetime.datetime.utcnow(),
+                    amount=float(row["金額"]) if not pd.isna(row["金額"]) else 0.0,
+                    description=clean_val(row["活動簡介"])
+                )
+                db.add(event)
+                db.commit()
+                db.refresh(event)
+
+            # 2. 處理使用者 (確保 User 資料表有紀錄)
+            user_email = clean_val(row["信箱"])
+            if not user_email: continue
+            
+            user_record = db.query(models.User).filter(models.User.email == user_email).first()
+            if not user_record:
+                user_record = models.User(
+                    email=user_email,
+                    display_name=clean_val(row["報名者姓名"]),
+                    birthday=clean_val(row["生日"])
+                )
+                db.add(user_record)
+                db.commit()
+
+            # 3. 處理報名資料
+            # 避免重複匯入同一場活動的同一個人 (選配)
+            existing_reg = db.query(models.Registration).filter(
+                models.Registration.event_id == event.id,
+                models.Registration.email == user_email
+            ).first()
+            
+            if not existing_reg:
+                registration = models.Registration(
+                    event_id=event.id,
+                    user_name=clean_val(row["報名者姓名"]),
+                    birthday=clean_val(row["生日"]),
+                    email=user_email,
+                    payment_status=clean_val(row["付款狀態"], "待付款"),
+                    registration_date=pd.to_datetime(row["報名日期"]) if not pd.isna(row["報名日期"]) else datetime.datetime.utcnow()
+                )
+                db.add(registration)
+                db.commit() # 每一筆都 commit 確保入庫
+                count += 1
+        except Exception as e:
+            db.rollback()
+            print(f"Error importing row: {e}")
+            continue # 跳過錯誤行
+    
+    return {"message": f"Successfully imported {count} records"}
 
 # --- Events Admin CRUD ---
 
