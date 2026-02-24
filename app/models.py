@@ -10,38 +10,78 @@ class User(Base):
     email = Column(String, primary_key=True, index=True)
     display_name = Column(String, index=True)
     birthday = Column(String)  # 格式: YYYY-MM-DD
-    is_vip = Column(Integer, default=1) # 0: 一般, 1: 好顧客 (VIP) - 預設為 VIP
+    phone = Column(String, nullable=True) # 新增：電話
+    shipping_address = Column(String, nullable=True) # 新增：通訊/配送地址
+    is_vip = Column(Integer, default=1) # 0: 一般, 1: 好顧客 (VIP)
     
-    registrations = relationship("Registration", back_populates="user_record")
+    orders = relationship("Order", back_populates="user_record")
 
-class Event(Base):
-    __tablename__ = "events"
+class Supplier(Base):
+    __tablename__ = "suppliers"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, index=True)
+    contact_info = Column(Text, nullable=True)
+    
+    products = relationship("Product", back_populates="supplier")
+
+class Product(Base):
+    __tablename__ = "products"
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True)
-    date = Column(DateTime)
-    description = Column(Text)
-    amount = Column(Float)
-    reminder_date = Column(String, nullable=True) # 催繳執行日期 YYYY-MM-DD
-    reminder_deadline = Column(String, nullable=True) # 催繳最後截止日期 YYYY-MM-DD
+    supplier_id = Column(Integer, ForeignKey("suppliers.id"))
+    available_stock = Column(Float, default=0.0) # 可購買庫存 (已預扣待出貨)
+    stock = Column(Float, default=0.0) # 實際庫存 (倉庫實體存量)
+    safety_stock = Column(Float, default=0.0) # 安全庫存
+    unit = Column(String) # 斤, 袋, 盒 等
+    price = Column(Float) # 單價
+    description = Column(Text, nullable=True)
     
-    registrations = relationship("Registration", back_populates="event", cascade="all, delete-orphan")
+    supplier = relationship("Supplier", back_populates="products")
+    order_items = relationship("OrderItem", back_populates="product")
+    losses = relationship("ProductLoss", back_populates="product", cascade="all, delete-orphan")
 
-class Registration(Base):
-    __tablename__ = "registrations"
+class ProductLoss(Base):
+    __tablename__ = "product_losses"
 
     id = Column(Integer, primary_key=True, index=True)
-    event_id = Column(Integer, ForeignKey("events.id"))
-    user_name = Column(String, index=True)
-    birthday = Column(String)  # 格式: YYYY-MM-DD
-    email = Column(String, ForeignKey("users.email"), index=True)
-    payment_status = Column(String, default="待付款")  # 待付款, 已付款
-    participant_count = Column(Integer, default=1) # 參加人數
-    notes = Column(Text, nullable=True) # 需求備註
-    registration_date = Column(DateTime, default=datetime.datetime.utcnow)
+    product_id = Column(Integer, ForeignKey("products.id"))
+    quantity = Column(Float)
+    reason = Column(String) # 損壞, 過期, 遺失 等
+    loss_date = Column(String) # YYYY-MM-DD
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
-    event = relationship("Event", back_populates="registrations")
-    user_record = relationship("User", back_populates="registrations")
+    product = relationship("Product", back_populates="losses")
+
+class Order(Base):
+    __tablename__ = "orders"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_email = Column(String, ForeignKey("users.email"), index=True)
+    total_amount = Column(Float)
+    payment_method = Column(String) # 現金, 轉帳, LINE Pay 等
+    payment_status = Column(String, default="待付款") # 待付款, 已付款
+    receiver_phone = Column(String, nullable=True) # 新增：收件人電話
+    receiver_address = Column(String, nullable=True) # 新增：收件人地址
+    status = Column(String, default="已建立") # 已建立, 已取消, 已完成
+    shipping_date = Column(String, nullable=True) # 預計出貨日 YYYY-MM-DD
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    user_record = relationship("User", back_populates="orders")
+    items = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan")
+
+class OrderItem(Base):
+    __tablename__ = "order_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    order_id = Column(Integer, ForeignKey("orders.id"))
+    product_id = Column(Integer, ForeignKey("products.id"))
+    quantity = Column(Float)
+    price_at_order = Column(Float) # 下單時的單價
+
+    order = relationship("Order", back_populates="items")
+    product = relationship("Product", back_populates="order_items")
 
 class Announcement(Base):
     __tablename__ = "announcements"
@@ -49,25 +89,22 @@ class Announcement(Base):
     title = Column(String)
     content = Column(Text)
     date = Column(String)  # 格式: YYYY-MM-DD
-    event_link_id = Column(Integer, ForeignKey("events.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
-
-    event_link = relationship("Event")
 
 class Wish(Base):
     __tablename__ = "wishes"
     id = Column(Integer, primary_key=True, index=True)
     user_email = Column(String)
     content = Column(Text)
-    category = Column(String)  # 活動希望, 改善建議
+    category = Column(String)  # 願望, 建議
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+class CartItem(Base):
+    __tablename__ = "cart_items"
+    id = Column(Integer, primary_key=True, index=True)
+    user_email = Column(String, ForeignKey("users.email"), index=True)
+    product_id = Column(Integer, ForeignKey("products.id"))
+    quantity = Column(Float)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
-class MarketingMail(Base) :
-    __tablename__ = "marketing_mails"
-    id = Column(Integer, primary_key=True, index=True)
-    subject = Column(String)
-    content = Column(Text)
-    scheduled_date = Column(String) # 格式: YYYY-MM-DD
-    scheduled_time = Column(String, default="09:00") # 格式: HH:MM
-    is_sent = Column(Integer, default=0) # 0: 尚未發送, 1: 已發送
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    user = relationship("User")
+    product = relationship("Product")

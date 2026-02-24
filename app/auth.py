@@ -29,7 +29,8 @@ async def get_google_user_info(code: str):
         }
         res = await client.post(token_url, data=data)
         if res.status_code != 200:
-            raise HTTPException(status_code=400, detail="Failed to get token from Google")
+            print(f"DEBUG Google OAuth Error: {res.text}") # 新增日誌
+            raise HTTPException(status_code=400, detail=f"Failed to get token from Google: {res.text}")
         
         tokens = res.json()
         access_token = tokens.get("access_token")

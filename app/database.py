@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./event_manager.db")
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:5173")
     ADMIN_EMAILS: str = os.getenv("ADMIN_EMAILS", "")
+    GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
     
     # Mail Settings
     MAIL_USERNAME: str = os.getenv("MAIL_USERNAME", "")

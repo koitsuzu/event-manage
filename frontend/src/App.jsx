@@ -1,77 +1,100 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Heart, Upload, LogIn, CheckCircle, Clock, XCircle, FileText, Calendar, Plus, Minus, ChevronRight, User, PenTool, LogOut, Info, Mail, Gift, Settings, BarChart2, Users, History, Activity, TrendingUp, Award, Sparkles, Compass, Bell, Megaphone, Trash2, Edit3, MessageSquare } from 'lucide-react';
+import {
+  Heart, Upload, LogIn, CheckCircle, Clock, XCircle, FileText,
+  Plus, Minus, ChevronRight, User, LogOut, Settings,
+  Activity, History, Megaphone, Trash2, Edit3, MessageSquare,
+  ShoppingCart, Package, Truck, AlertTriangle, Send, Search
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useRef } from 'react';
+import ReactMarkdown from 'react-markdown';
 
-const API_BASE = "http://localhost:8000";
+const API_BASE = "http://localhost:5000";
 
 function App() {
   const [currentUserProfile, setCurrentUserProfile] = useState(null);
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [isAdmin, setIsAdmin] = useState(localStorage.getItem('isAdmin') === 'true');
-  const [events, setEvents] = useState([]);
-  const [selectedEvent, setSelectedEvent] = useState(null);
-  const [registrations, setRegistrations] = useState([]);
-  const [myRegistrations, setMyRegistrations] = useState([]);
-  const [memberStats, setMemberStats] = useState([]);
+
+  const [products, setProducts] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
+  const [myOrders, setMyOrders] = useState([]);
+  const [allOrders, setAllOrders] = useState([]);
+  const [losses, setLosses] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [view, setView] = useState('events');
-  const [showRegForm, setShowRegForm] = useState(false);
-  const [showProfileEdit, setShowProfileEdit] = useState(false);
-  const [showAnnForm, setShowAnnForm] = useState(false);
-  const [showWishForm, setShowWishForm] = useState(false);
-  const [wishes, setWishes] = useState([]);
-  const [annFormData, setAnnFormData] = useState({ title: '', content: '', date: new Date().toISOString().split('T')[0], event_link_id: null });
-  const [wishFormData, setWishFormData] = useState({ content: '', category: '活動希望' });
-  const [editingAnnId, setEditingAnnId] = useState(null);
-  const [regFormData, setRegFormData] = useState({
-    user_name: '',
-    birthday: '',
-    participant_count: 1,
-    notes: ''
+  const [cartItems, setCartItems] = useState([]);
+  const [giftIds, setGiftIds] = useState(() => {
+    const saved = localStorage.getItem('giftIds');
+    return saved ? new Set(JSON.parse(saved)) : new Set();
   });
-  const [profileFormData, setProfileFormData] = useState({ display_name: '', birthday: '' });
-  const [selectedRegDetails, setSelectedRegDetails] = useState(null);
-  const [expandedMember, setExpandedMember] = useState(null);
-  const [showEventForm, setShowEventForm] = useState(false);
-  const [eventFormData, setEventFormData] = useState({ name: '', date: '', amount: 0, description: '', reminder_date: '', reminder_deadline: '' });
-  const [editingEventId, setEditingEventId] = useState(null);
-  const [marketingMails, setMarketingMails] = useState([]);
-  const [showMarketingForm, setShowMarketingForm] = useState(false);
-  const [editingMarketingId, setEditingMarketingId] = useState(null);
-  const [marketingFormData, setMarketingFormData] = useState({ subject: '', content: '', scheduled_date: new Date().toISOString().split('T')[0], scheduled_time: '09:00' });
+
+  useEffect(() => {
+    localStorage.setItem('giftIds', JSON.stringify(Array.from(giftIds)));
+  }, [giftIds]);
+
+  const [view, setView] = useState('products');
+  const [loading, setLoading] = useState(false);
+  const [importType, setImportType] = useState('products');
+
+  // Chat state
+  const [chatMessage, setChatMessage] = useState("");
+  const [chatResponse, setChatResponse] = useState(null);
+
+  // Forms
+  const [showProductForm, setShowProductForm] = useState(false);
+  const [productFormData, setProductFormData] = useState({
+    name: '', supplier_id: '', available_stock: 0, stock: 0, safety_stock: 0, unit: '斤', price: 0, description: ''
+  });
+  const [editingProductId, setEditingProductId] = useState(null);
+
+  const [showLossForm, setShowLossForm] = useState(false);
+  const [lossFormData, setLossFormData] = useState({ p_id: '', qty: 0, reason: '損毀', date: new Date().toISOString().split('T')[0] });
+
+  const [showProfileForm, setShowProfileForm] = useState(false);
+  const [profileFormData, setProfileFormData] = useState({ display_name: '', phone: '', shipping_address: '' });
+
+  const [confirmOrderData, setConfirmOrderData] = useState(null);
+  const [shippingInfo, setShippingInfo] = useState({ phone: '', address: '' });
+  const [paymentMethod, setPaymentMethod] = useState('轉帳');
+  const [isChatMinimized, setIsChatMinimized] = useState(false);
+  const [expandedUser, setExpandedUser] = useState(null);
+  const [expandedOrder, setExpandedOrder] = useState(null);
+
+  const [showAnnForm, setShowAnnForm] = useState(false);
+  const [annFormData, setAnnFormData] = useState({ title: '', content: '', date: new Date().toISOString().split('T')[0] });
+  const [editingAnnId, setEditingAnnId] = useState(null);
+
+  const [chatHistory, setChatHistory] = useState([]);
+  const hasCalledCallback = useRef(false);
 
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const code = urlParams.get('code');
-    const eventIdParam = urlParams.get('event');
-
-    if (code) {
+    if (code && !hasCalledCallback.current) {
+      hasCalledCallback.current = true;
       handleCallback(code);
     }
+  }, []); // Only run once on mount to catch the code
 
-    if (eventIdParam && events.length > 0) {
-      const target = events.find(e => e.id === parseInt(eventIdParam));
-      if (target) {
-        setSelectedEvent(target);
-        if (isAdmin) fetchAdminRegistrations(target.id);
-        // 清除 URL 參數避免重複觸發
-        // window.history.replaceState({}, document.title, "/");
-      }
-    }
-
-    fetchEvents();
+  useEffect(() => {
+    fetchProducts();
     fetchAnnouncements();
     if (token) {
       fetchMyProfile();
-      fetchMyRegistrations();
+      fetchMyOrders();
+      fetchCart();
       if (isAdmin) {
-        fetchMemberStats();
-        fetchWishes();
+        fetchAdminData();
       }
     }
-  }, [token, isAdmin, events.length]); // 加入 events.length 確保資料載入後才解析參數
+  }, [token, isAdmin]);
+
+  const fetchAdminData = () => {
+    fetchSuppliers();
+    fetchAllOrders();
+    fetchLosses();
+  };
 
   const handleLogin = async () => {
     const res = await axios.get(`${API_BASE}/auth/login-url`);
@@ -84,11 +107,11 @@ function App() {
     setToken(null);
     setIsAdmin(false);
     setCurrentUserProfile(null);
-    setView('events');
-    setSelectedEvent(null);
+    setView('products');
   };
 
   const handleCallback = async (code) => {
+    window.history.replaceState({}, document.title, "/");
     try {
       const res = await axios.get(`${API_BASE}/auth/callback?code=${code}`);
       localStorage.setItem('token', res.data.access_token);
@@ -96,7 +119,6 @@ function App() {
       setToken(res.data.access_token);
       setIsAdmin(res.data.is_admin);
       setCurrentUserProfile(res.data.user);
-      window.history.replaceState({}, document.title, "/");
     } catch (err) {
       console.error("Login failed", err);
     }
@@ -104,309 +126,273 @@ function App() {
 
   const fetchMyProfile = async () => {
     try {
-      const res = await axios.get(`${API_BASE}/me`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await axios.get(`${API_BASE}/me`, { headers: { Authorization: `Bearer ${token}` } });
       setCurrentUserProfile(res.data);
-      setProfileFormData({ display_name: res.data.display_name || '', birthday: res.data.birthday || '' });
-
-      // 自動校準權限：確保 .env 修改後重新整理即可生效
       if (res.data.is_admin !== undefined) {
         setIsAdmin(res.data.is_admin);
         localStorage.setItem('isAdmin', res.data.is_admin);
       }
-    } catch (err) {
-      console.error("Fetch profile failed", err.response?.data || err);
-    }
+      setProfileFormData({
+        display_name: res.data.display_name || '',
+        phone: res.data.phone || '',
+        shipping_address: res.data.shipping_address || ''
+      });
+    } catch (err) { console.error("Fetch profile failed", err); }
   };
 
-  const handleProfileUpdate = async (e) => {
-    e.preventDefault();
-    try {
-      const res = await axios.patch(`${API_BASE}/me`,
-        {
-          display_name: profileFormData.display_name,
-          birthday: profileFormData.birthday
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-      setCurrentUserProfile(res.data);
-      setShowProfileEdit(false);
-      alert("個人資料已更新");
-      fetchMyRegistrations();
-      if (isAdmin) fetchMemberStats();
-    } catch (err) {
-      console.error("Update failed", err.response?.data || err);
-      alert("更新失敗");
-    }
+  const fetchProducts = async () => {
+    const res = await axios.get(`${API_BASE}/products`);
+    setProducts(res.data);
   };
 
-  const fetchEvents = async () => {
-    const res = await axios.get(`${API_BASE}/events`);
-    const sorted = res.data.sort((a, b) => new Date(a.date) - new Date(b.date));
-    setEvents(sorted);
+  const fetchSuppliers = async () => {
+    const res = await axios.get(`${API_BASE}/admin/suppliers`, { headers: { Authorization: `Bearer ${token}` } });
+    setSuppliers(res.data);
+  };
+
+  const fetchMyOrders = async () => {
+    const res = await axios.get(`${API_BASE}/my-orders`, { headers: { Authorization: `Bearer ${token}` } });
+    setMyOrders(res.data);
+  };
+
+  const fetchAllOrders = async () => {
+    const res = await axios.get(`${API_BASE}/admin/orders`, { headers: { Authorization: `Bearer ${token}` } });
+    setAllOrders(res.data);
+  };
+
+  const fetchLosses = async () => {
+    const res = await axios.get(`${API_BASE}/admin/losses`, { headers: { Authorization: `Bearer ${token}` } });
+    setLosses(res.data);
   };
 
   const fetchAnnouncements = async () => {
+    const res = await axios.get(`${API_BASE}/announcements`);
+    setAnnouncements(res.data);
+  };
+
+  const fetchCart = async () => {
     try {
-      const res = await axios.get(`${API_BASE}/announcements`);
-      setAnnouncements(res.data);
+      const res = await axios.get(`${API_BASE}/cart`, { headers: { Authorization: `Bearer ${token}` } });
+      setCartItems(res.data);
+      // 從後端同步贈品清單
+      const gifts = new Set(res.data.filter(it => it.is_gift).map(it => it.product_id));
+      setGiftIds(gifts);
+    } catch (err) { console.error("Fetch cart failed", err); }
+  };
+  const handleClearCart = async () => {
+    if (!window.confirm("確定要清空購物車嗎？")) return;
+    try {
+      await axios.post(`${API_BASE}/cart`, { items: [] }, { headers: { Authorization: `Bearer ${token}` } });
+      setCartItems([]);
+      setGiftIds(new Set());
+    } catch (err) { console.error("Clear cart failed", err); }
+  };
+
+  const updateCartQuantity = async (productId, newQuantity) => {
+    if (newQuantity < 0) return;
+
+    // 立即更新本地狀態提升響應感
+    const updatedItems = cartItems.map(it =>
+      it.product_id === productId ? { ...it, quantity: newQuantity } : it
+    ).filter(it => it.quantity > 0);
+
+    setCartItems(updatedItems);
+
+    try {
+      await axios.post(`${API_BASE}/cart`, {
+        items: updatedItems.map(it => ({
+          product_id: it.product_id,
+          quantity: it.quantity
+        }))
+      }, { headers: { Authorization: `Bearer ${token}` } });
     } catch (err) {
-      console.error("Fetch announcements failed", err);
+      console.error("Sync cart failed", err);
+      fetchCart(); // 失敗時回滾
     }
   };
 
-  const fetchMyRegistrations = async () => {
+  const sendMessage = async (text) => {
+    if (!text.trim()) return;
+
+    const userMsg = { role: 'user', content: text };
+    setChatHistory(prev => [...prev, userMsg]);
+    setLoading(true);
+
     try {
-      const res = await axios.get(`${API_BASE}/my-registrations`, {
+      const historyToSend = chatHistory.slice(-12).map(h => ({
+        role: h.role,
+        content: h.content,
+        tool_calls: h.tool_calls,
+        tool_call_id: h.tool_call_id,
+        name: h.name
+      }));
+
+      const res = await axios.post(`${API_BASE}/chat-order`, {
+        message: text,
+        history: historyToSend
+      }, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setMyRegistrations(res.data);
+
+      const aiResponse = {
+        role: 'assistant',
+        content: res.data.response,
+        intent: res.data.intent,
+        data: res.data.data
+      };
+
+      setChatHistory(prev => [...prev, aiResponse]);
+
+      if (res.data.intent === 'ORDER') {
+        setChatResponse(res.data.data);
+        if (res.data.data.gift_ids) {
+          setGiftIds(new Set(res.data.data.gift_ids));
+        }
+        fetchCart();
+      }
     } catch (err) {
-      console.error("Fetch my registrations failed", err);
+      setChatHistory(prev => [...prev, { role: 'assistant', content: '抱歉，我暫時斷線了，請稍後再試。' }]);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const fetchAdminRegistrations = async (eventId) => {
+  const handleChatOrder = async (e) => {
+    e.preventDefault();
+    if (!chatMessage.trim()) return;
+    const msg = chatMessage;
+    setChatMessage('');
+    sendMessage(msg);
+  };
+
+  const handleConfirmOrder = async () => {
     setLoading(true);
     try {
-      const res = await axios.get(`${API_BASE}/admin/events/${eventId}/registrations`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setRegistrations(res.data);
-      setLoading(false);
+      await axios.post(`${API_BASE}/confirm-order`, {
+        items: confirmOrderData.items.map(it => ({
+          product_id: it.product_id,
+          quantity: it.quantity,
+          price_at_order: it.price,
+          is_gift: giftIds.has(it.product_id)
+        })),
+        payment_method: paymentMethod,
+        receiver_phone: shippingInfo.phone,
+        receiver_address: shippingInfo.address,
+        total_amount: Number(confirmOrderData.total_amount).toFixed(0)
+      }, { headers: { Authorization: `Bearer ${token}` } });
+
+      alert("訂單已成功送出！");
+      setConfirmOrderData(null);
+      setChatResponse(null);
+      fetchProducts();
+      fetchMyOrders();
+      fetchCart(); // 結帳後清空或更新購物車
     } catch (err) {
+      alert(err.response?.data?.detail || "確認訂單失敗");
+    } finally {
       setLoading(false);
     }
   };
 
-  const fetchMemberStats = async () => {
+  const handleShipOrder = async (orderId) => {
     try {
-      const res = await axios.get(`${API_BASE}/admin/member-stats`, {
+      await axios.post(`${API_BASE}/admin/orders/${orderId}/ship`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setMemberStats(res.data);
+      alert("出貨成功！實體庫存已扣除。");
+      fetchAllOrders();
+      fetchProducts();
     } catch (err) {
-      console.error("Fetch stats failed", err);
+      alert(err.response?.data?.detail || "出貨操作失敗");
     }
   };
 
-  const handleRegisterSubmit = async (e) => {
+  const handleProfileSubmit = async (e) => {
     e.preventDefault();
-    if (!token) return handleLogin();
-
     try {
-      await axios.post(`${API_BASE}/events/${selectedEvent.id}/register`, null, {
-        params: {
-          user_name: regFormData.user_name,
-          birthday: regFormData.birthday,
-          participant_count: regFormData.participant_count,
-          notes: regFormData.notes
-        },
+      await axios.patch(`${API_BASE}/me`, profileFormData, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      alert('報名成功！感謝參與，我們已發送確認信件至您的信箱，請查收明細。');
-      setShowRegForm(false);
-      fetchEvents();
-      fetchMyRegistrations();
-      if (isAdmin) fetchMemberStats();
-    } catch (err) {
-      alert(err.response?.data?.detail || '報名失敗');
-    }
+      setShowProfileForm(false);
+      fetchMyProfile();
+      alert("個人資料已更新");
+    } catch (err) { alert("更新失敗"); }
+  };
+
+  const handleProductSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      if (editingProductId) {
+        await axios.patch(`${API_BASE}/admin/products/${editingProductId}`, productFormData, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      } else {
+        await axios.post(`${API_BASE}/admin/products`, productFormData, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      }
+      setShowProductForm(false);
+      fetchProducts();
+    } catch (err) { alert("儲存失敗"); }
+  };
+
+  const handleLossSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.post(`${API_BASE}/admin/losses`, null, {
+        params: lossFormData,
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setShowLossForm(false);
+      fetchProducts();
+      fetchLosses();
+      alert("損耗已紀錄並扣除庫存");
+    } catch (err) { alert(err.response?.data?.detail || "紀錄失敗"); }
+  };
+
+  const updateShipping = async (orderId, date) => {
+    try {
+      await axios.patch(`${API_BASE}/admin/orders/${orderId}/shipping?shipping_date=${date}`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      fetchAllOrders();
+    } catch (err) { alert("更新失敗"); }
+  };
+
+  const updatePaymentStatus = async (orderId, status) => {
+    try {
+      await axios.patch(`${API_BASE}/admin/orders/${orderId}/payment?status=${status}`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      fetchAllOrders();
+    } catch (err) { alert("更新失敗"); }
   };
 
   const handleAnnSubmit = async (e) => {
     e.preventDefault();
     try {
-      const data = { ...annFormData, event_link_id: annFormData.event_link_id ? parseInt(annFormData.event_link_id) : null };
       if (editingAnnId) {
-        await axios.patch(`${API_BASE}/admin/announcements/${editingAnnId}`, data, {
+        await axios.patch(`${API_BASE}/admin/announcements/${editingAnnId}`, annFormData, {
           headers: { Authorization: `Bearer ${token}` }
         });
       } else {
-        await axios.post(`${API_BASE}/admin/announcements`, data, {
+        await axios.post(`${API_BASE}/admin/announcements`, annFormData, {
           headers: { Authorization: `Bearer ${token}` }
         });
       }
       setShowAnnForm(false);
-      setEditingAnnId(null);
-      setAnnFormData({ title: '', content: '', date: new Date().toISOString().split('T')[0], event_link_id: null });
       fetchAnnouncements();
-    } catch (err) {
-      alert("儲存失敗");
-    }
+    } catch (err) { alert("儲存失敗"); }
   };
 
-  const fetchWishes = async () => {
-    try {
-      const res = await axios.get(`${API_BASE}/admin/wishes`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setWishes(res.data);
-    } catch (err) {
-      console.error("Fetch wishes failed", err);
-    }
-  };
-
-  const handleWishSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      await axios.post(`${API_BASE}/wishes`, wishFormData, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setShowWishForm(false);
-      setWishFormData({ content: '', category: '活動希望' });
-      alert("願望已投遞至許願池！✨");
-    } catch (err) {
-      alert("投遞失敗");
-    }
-  };
-
-  const deleteAnnouncement = async (id) => {
-    if (!window.confirm("確定要刪除此公告嗎？")) return;
+  const deleteAnn = async (id) => {
+    if (!confirm("確定要刪除這條公告嗎？")) return;
     try {
       await axios.delete(`${API_BASE}/admin/announcements/${id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       fetchAnnouncements();
-    } catch (err) {
-      alert("刪除失敗");
-    }
-  };
-
-  const handleEventSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      if (editingEventId) {
-        await axios.patch(`${API_BASE}/admin/events/${editingEventId}`, eventFormData, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-      } else {
-        await axios.post(`${API_BASE}/admin/events`, eventFormData, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-      }
-      setShowEventForm(false);
-      setEditingEventId(null);
-      setEventFormData({ name: '', date: '', amount: 0, description: '', reminder_date: '', reminder_deadline: '' });
-      fetchEvents();
-      alert("活動已成功儲存");
-    } catch (err) {
-      alert("儲存活動失敗");
-    }
-  };
-
-  const deleteEvent = async (id) => {
-    if (!window.confirm("確定要刪除此活動嗎？這將會刪除所有相關的報名資料！")) return;
-    try {
-      await axios.delete(`${API_BASE}/admin/events/${id}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      fetchEvents();
-      if (selectedEvent?.id === id) setSelectedEvent(null);
-      alert("活動已刪除");
-    } catch (err) {
-      alert("刪除活動失敗");
-    }
-  };
-
-  const openEditEvent = (event) => {
-    setEditingEventId(event.id);
-    setEventFormData({
-      name: event.name,
-      date: new Date(event.date).toISOString().slice(0, 16),
-      amount: event.amount,
-      description: event.description || '',
-      reminder_date: event.reminder_date || '',
-      reminder_deadline: event.reminder_deadline || ''
-    });
-    setShowEventForm(true);
-  };
-
-  const handleTriggerReminders = async () => {
-    if (!window.confirm("確定要對所有當前符合催繳日期（今日）的活動發送提醒信嗎？")) return;
-    try {
-      const res = await axios.post(`${API_BASE}/admin/reminders/trigger`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      alert(res.data.message);
-    } catch (err) {
-      alert("觸發失敗: " + (err.response?.data?.detail || "伺服器錯誤"));
-    }
-  };
-
-  const toggleVipStatus = async (email, currentVip) => {
-    try {
-      const newVip = currentVip === 1 ? 0 : 1;
-      await axios.patch(`${API_BASE}/admin/users/${email}/vip?is_vip=${newVip}`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      fetchMemberStats();
-    } catch (err) {
-      alert("更新 VIP 狀態失敗");
-    }
-  };
-
-  const fetchMarketingMails = async () => {
-    try {
-      const res = await axios.get(`${API_BASE}/admin/marketing-mails`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setMarketingMails(res.data);
-    } catch (err) {
-      console.error("Fetch marketing mails failed", err);
-    }
-  };
-
-  const handleMarketingSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      if (editingMarketingId) {
-        await axios.patch(`${API_BASE}/admin/marketing-mails/${editingMarketingId}`, marketingFormData, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        alert("行銷郵件排程已更新");
-      } else {
-        await axios.post(`${API_BASE}/admin/marketing-mails`, marketingFormData, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        alert("行銷郵件排程已儲存");
-      }
-      setShowMarketingForm(false);
-      setEditingMarketingId(null);
-      setMarketingFormData({ subject: '', content: '', scheduled_date: new Date().toISOString().split('T')[0], scheduled_time: '09:00' });
-      fetchMarketingMails();
-    } catch (err) {
-      alert(err.response?.data?.detail || "儲存排程失敗");
-    }
-  };
-
-  const openEditMarketing = (mail) => {
-    setEditingMarketingId(mail.id);
-    setMarketingFormData({
-      subject: mail.subject,
-      content: mail.content,
-      scheduled_date: mail.scheduled_date,
-      scheduled_time: mail.scheduled_time || '09:00'
-    });
-    setShowMarketingForm(true);
-  };
-
-  const deleteMarketingMail = async (id) => {
-    if (!window.confirm("確定要刪除此排程嗎？")) return;
-    try {
-      await axios.delete(`${API_BASE}/admin/marketing-mails/${id}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      fetchMarketingMails();
-    } catch (err) {
-      alert("刪除失敗");
-    }
+    } catch (err) { alert("刪除失敗"); }
   };
 
   const handleFileUpload = async (e) => {
@@ -417,1100 +403,1067 @@ function App() {
     formData.append('file', file);
 
     try {
-      await axios.post(`${API_BASE}/upload-csv`, formData, {
+      await axios.post(`${API_BASE}/upload-csv?import_type=${importType}`, formData, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'multipart/form-data'
         }
       });
-      alert("匯入成功！");
-      fetchEvents();
-      fetchMemberStats();
-    } catch (err) {
-      alert("匯入失敗: " + (err.response?.data?.detail || "只有管理員可以匯入"));
-    }
-  };
-
-  const updatePaymentStatus = async (regId, status) => {
-    try {
-      await axios.patch(`${API_BASE}/registrations/${regId}/payment?status=${status}`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setRegistrations(prev => prev.map(r => r.id === regId ? { ...r, payment_status: status } : r));
-      if (selectedRegDetails?.id === regId) {
-        setSelectedRegDetails(prev => ({ ...prev, payment_status: status }));
+      alert(`匯入 ${importType} 成功！`);
+      fetchProducts();
+      fetchAllOrders();
+      fetchProducts();
+      if (isAdmin) {
+        fetchAdminData();
       }
-      if (isAdmin) fetchMemberStats();
     } catch (err) {
-      alert("更新失敗");
+      alert("匯入失敗: " + (err.response?.data?.detail || "請求錯誤"));
     }
   };
 
-  const handleSelectMyRegistration = (reg) => {
-    const event = events.find(e => e.id === reg.event_id);
-    if (event) {
-      setSelectedEvent(event);
-    }
-  };
-
-  const today = new Date().setHours(0, 0, 0, 0);
-
-  const activeEvents = events.filter(e => new Date(e.date) >= today);
-  const historyEvents = events.filter(e => new Date(e.date) < today).sort((a, b) => new Date(b.date) - new Date(a.date));
-
-  const eventsToShow = view === 'events' ? activeEvents : (view === 'history' ? historyEvents : []);
-
-  // 檢查當前使用者是否已報名目前的 selectedEvent
-  const checkRegistrationStatus = () => {
-    if (!selectedEvent || !token) return null;
-    return myRegistrations.find(r => r.event_id === selectedEvent.id);
-  };
-
-  const userRegInfo = checkRegistrationStatus();
-  const isAdminView = ['stats', 'ann-admin', 'wish-admin', 'marketing'].includes(view);
+  const isAdminView = ['products-admin', 'losses-admin', 'announcements-admin'].includes(view);
 
   return (
-    <div className={`flex h-screen overflow-hidden transition-colors duration-500 ${isAdminView ? 'bg-[#11110F]' : 'bg-[#F9F7F2]'}`}>
-      {/* Sidebar */}
-      {/* Sidebar */}
-      <aside className={`w-64 flex-shrink-0 border-r transition-all duration-500 flex flex-col shadow-sm relative z-50 ${isAdminView ? 'bg-[#141411] border-[#363632]' : 'bg-white border-[#D2B48C]/20'}`}>
-        <div className="p-8">
-          <h1 className={`text-2xl font-serif font-bold flex items-center gap-2 text-nowrap transition-colors ${isAdminView ? 'text-[#F5F5F0]' : 'text-[#4A4A4A]'}`}>
-            <span className="text-[#B87333]">✦</span> {isAdmin ? '管理平台' : '活動總覽'}
-          </h1>
-          <p className={`text-[10px] mt-1 uppercase tracking-widest font-bold transition-colors ${isAdminView ? 'text-[#A0A095]' : 'text-[#4A4A4A]/40'}`}>Activity & Membership</p>
-        </div>
-
-        <nav className="flex-1 px-4 py-4 space-y-2 overflow-y-auto custom-scrollbar">
-          <div className="space-y-1">
-            <p className={`text-[9px] font-bold uppercase tracking-widest px-6 mb-2 transition-colors ${isAdminView ? 'text-[#A0A095]' : 'text-[#4A4A4A]/30'}`}>主選單</p>
-            <button
-              onClick={() => { setView('events'); setSelectedEvent(null); }}
-              className={`w-full flex items-center gap-3 px-6 py-4 rounded-3xl transition-all ${view === 'events' ? 'bg-[#8FBC8F]/10 text-[#8FBC8F] font-bold' : (isAdminView ? 'text-[#A0A095] hover:bg-[#242421]' : 'text-[#4A4A4A]/60 hover:bg-gray-50')}`}
-            >
-              <Activity size={18} /> {isAdmin ? '活動管理' : '當前項目'}
-            </button>
-
-            <button
-              onClick={() => { setView('history'); setSelectedEvent(null); }}
-              className={`w-full flex items-center gap-3 px-6 py-4 rounded-3xl transition-all ${view === 'history' ? 'bg-amber-50 text-amber-600 font-bold' : (isAdminView ? 'text-[#A0A095] hover:bg-[#242421]' : 'text-[#4A4A4A]/60 hover:bg-gray-50')}`}
-            >
-              <History size={18} /> 歷史回顧
-            </button>
-
-            <button
-              onClick={() => { setView('ann-board'); setSelectedEvent(null); fetchAnnouncements(); }}
-              className={`w-full flex items-center gap-3 px-6 py-4 rounded-3xl transition-all ${view === 'ann-board' ? 'bg-indigo-50 text-indigo-600 font-bold' : (isAdminView ? 'text-[#A0A095] hover:bg-[#242421]' : 'text-[#4A4A4A]/60 hover:bg-gray-50')}`}
-            >
-              <Megaphone size={18} /> 最新公告
-            </button>
-
-            {token && !isAdmin && (
-              <>
-                <button
-                  onClick={() => { setView('my-registrations'); setSelectedEvent(null); }}
-                  className={`w-full flex items-center gap-3 px-6 py-4 rounded-3xl transition-all ${view === 'my-registrations' ? 'bg-[#B87333]/10 text-[#B87333] font-bold' : 'text-[#4A4A4A]/60 hover:bg-gray-50'}`}
-                >
-                  <FileText size={18} /> 我的參與
-                </button>
-
-                <button
-                  onClick={() => { setShowWishForm(true); }}
-                  className={`w-full flex items-center gap-3 px-6 py-4 rounded-3xl text-[#4A4A4A]/60 hover:bg-gray-50 transition-all`}
-                >
-                  <PenTool size={18} /> 許願池
-                </button>
-              </>
-            )}
+    <div className={`flex flex-col h-screen overflow-hidden ${isAdminView ? 'bg-zinc-950 text-white' : 'bg-orange-50/30'}`}>
+      {/* Top Navbar */}
+      <header className={`h-16 border-b flex items-center justify-between px-8 shrink-0 z-50 ${isAdminView ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-orange-100 shadow-sm'}`}>
+        <div className="flex items-center gap-8">
+          <div className="flex items-center gap-2 cursor-pointer" onClick={() => setView('products')}>
+            <div className="w-8 h-8 bg-orange-600 rounded-lg flex items-center justify-center text-white">
+              <Package size={18} />
+            </div>
+            <div>
+              <h1 className="text-lg font-bold text-orange-800 leading-none">新鮮農產</h1>
+              <p className="text-[8px] uppercase tracking-widest opacity-40">Farm Direct Produce</p>
+            </div>
           </div>
 
+          <nav className="flex items-center gap-1">
+            <button onClick={() => setView('products')} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm transition-all ${view === 'products' ? 'bg-orange-100 text-orange-800 font-bold' : 'opacity-60 hover:bg-orange-50'}`}>
+              <ShoppingCart size={16} /> 農產市集
+            </button>
+
+            {token && (
+              <button onClick={() => setView('my-orders')} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm transition-all ${view === 'my-orders' ? 'bg-orange-100 text-orange-800 font-bold' : 'opacity-60 hover:bg-orange-50'}`}>
+                <History size={16} /> {isAdmin ? "所有顧客訂單" : "我的訂單"}
+              </button>
+            )}
+
+            {token && !isAdmin && (
+              <button onClick={() => setView('cart')} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm transition-all relative ${view === 'cart' ? 'bg-orange-100 text-orange-800 font-bold' : 'opacity-60 hover:bg-orange-50'}`}>
+                <ShoppingCart size={16} /> 購物車
+                {cartItems.length > 0 && (
+                  <span className="absolute -right-1 -top-1 bg-orange-600 text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center border border-white font-bold">{cartItems.length}</span>
+                )}
+              </button>
+            )}
+
+            {isAdmin && (
+              <div className="flex items-center gap-1 border-l border-zinc-700/50 ml-2 pl-2">
+                <button onClick={() => setView('shipping')} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm transition-all ${view === 'shipping' ? 'bg-zinc-800 text-white font-bold' : 'opacity-60 hover:bg-zinc-800'}`}>
+                  <Truck size={16} /> 出貨
+                </button>
+                <button onClick={() => setView('products-admin')} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm transition-all ${view === 'products-admin' ? 'bg-zinc-800 text-white font-bold' : 'opacity-60 hover:bg-zinc-800'}`}>
+                  <Settings size={16} /> 產品庫存
+                </button>
+                <button onClick={() => setView('announcements-admin')} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm transition-all ${view === 'announcements-admin' ? 'bg-zinc-800 text-white font-bold' : 'opacity-60 hover:bg-zinc-800'}`}>
+                  <Megaphone size={16} /> 公告
+                </button>
+              </div>
+            )}
+          </nav>
+        </div>
+
+        <div className="flex items-center gap-4">
           {isAdmin && (
-            <div className="pt-8 space-y-2">
-              <p className={`text-[9px] font-bold uppercase tracking-widest px-6 mb-2 transition-colors ${isAdminView ? 'text-[#A0A095]' : 'text-[#4A4A4A]/30'}`}>管理控制台</p>
-
-              <button
-                onClick={() => { setView('stats'); setSelectedEvent(null); fetchMemberStats(); }}
-                className={`w-full flex items-center gap-3 px-6 py-4 rounded-3xl transition-all ${view === 'stats' ? (isAdminView ? 'bg-[#242421] text-[#F5F5F0] font-bold shadow-lg shadow-black/20' : 'bg-stone-100 text-[#4A4A4A] font-bold') : (isAdminView ? 'text-[#A0A095] hover:bg-[#242421]' : 'text-[#4A4A4A]/60 hover:bg-gray-50')}`}
+            <div className="flex items-center gap-2 bg-zinc-800 px-3 py-1.5 rounded-xl border border-zinc-700">
+              <p className="text-[10px] font-bold opacity-30 uppercase whitespace-nowrap">匯入</p>
+              <select
+                value={importType}
+                onChange={e => setImportType(e.target.value)}
+                className="bg-transparent text-[10px] border-none rounded-lg p-0 text-white focus:ring-0 cursor-pointer"
               >
-                <Users size={18} /> 成員統計報告
-              </button>
-
-              <button
-                onClick={() => { setView('ann-admin'); setSelectedEvent(null); fetchAnnouncements(); }}
-                className={`w-full flex items-center gap-3 px-6 py-4 rounded-3xl transition-all ${view === 'ann-admin' ? (isAdminView ? 'bg-red-500/10 text-red-400 font-bold' : 'bg-red-50 text-red-600 font-bold') : (isAdminView ? 'text-[#A0A095] hover:bg-[#242421]' : 'text-[#4A4A4A]/60 hover:bg-gray-50')}`}
-              >
-                <Bell size={18} /> 公告中心管理
-              </button>
-
-              <button
-                onClick={() => { setView('marketing'); setSelectedEvent(null); fetchMarketingMails(); }}
-                className={`w-full flex items-center gap-3 px-6 py-4 rounded-3xl transition-all ${view === 'marketing' ? (isAdminView ? 'bg-pink-500/10 text-pink-400 font-bold' : 'bg-pink-50 text-pink-600 font-bold') : (isAdminView ? 'text-[#A0A095] hover:bg-[#242421]' : 'text-[#4A4A4A]/60 hover:bg-gray-50')}`}
-              >
-                <Mail size={18} /> 行銷郵件中心
-              </button>
-
-              <button
-                onClick={() => { setView('wish-admin'); setSelectedEvent(null); fetchWishes(); }}
-                className={`w-full flex items-center gap-3 px-6 py-4 rounded-3xl transition-all ${view === 'wish-admin' ? (isAdminView ? 'bg-purple-500/10 text-purple-400 font-bold' : 'bg-purple-50 text-purple-600 font-bold') : (isAdminView ? 'text-[#A0A095] hover:bg-[#242421]' : 'text-[#4A4A4A]/60 hover:bg-gray-50')}`}
-              >
-                <Award size={18} /> 許願池管理
-              </button>
-
-              <label className={`flex items-center gap-3 px-6 py-4 rounded-3xl cursor-pointer transition-all ${isAdminView ? 'text-[#A0A095] hover:bg-[#242421]' : 'text-[#4A4A4A]/60 hover:bg-gray-50'}`}>
-                <Upload size={18} /> <span className="text-nowrap">匯入 CSV 名冊</span>
+                <option value="products">產品</option>
+                <option value="losses">損耗</option>
+              </select>
+              <label className="text-orange-500 cursor-pointer hover:text-orange-400">
+                <Upload size={14} />
                 <input type="file" hidden accept=".csv" onChange={handleFileUpload} />
               </label>
             </div>
           )}
-        </nav>
 
-        {/* Member Section */}
-        <div className={`p-6 border-t transition-all duration-500 ${isAdminView ? 'bg-[#1A1A17] border-[#363632]' : 'bg-gray-50/30 border-[#D2B48C]/10'}`}>
           {!token ? (
-            <button onClick={handleLogin} className="w-full bg-[#8FBC8F] text-white py-4 rounded-3xl font-bold hover:bg-[#8FBC8F]/90 transition-all flex items-center justify-center gap-2 shadow-lg shadow-green-100">
-              <LogIn size={18} /> Google 登入
+            <button onClick={handleLogin} className="bg-green-600 text-white px-6 py-2 rounded-xl font-bold text-sm hover:bg-green-700 transition-all flex items-center gap-2">
+              <LogIn size={16} /> 登入
             </button>
           ) : (
-            <div className="space-y-4">
-              <div className="flex items-center gap-3 px-2">
-                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-[#B87333] shadow-sm flex-shrink-0 border transition-colors ${isAdminView ? 'bg-[#242421] border-[#363632]' : 'bg-white border-[#D2B48C]/20'}`}>
-                  <User size={24} />
-                </div>
-                <div className="flex-1 overflow-hidden">
-                  <div className="flex items-center justify-between">
-                    <p className={`text-sm font-black truncate transition-colors ${isAdminView ? 'text-[#F5F5F0]' : 'text-[#4A4A4A]'}`}>{currentUserProfile?.display_name || '探索者'}</p>
-                    <button
-                      onClick={() => setShowProfileEdit(true)}
-                      className={`hover:bg-[#B87333]/10 p-1.5 rounded-lg transition-colors ml-1 flex-shrink-0 ${isAdminView ? 'text-stone-500' : 'text-[#B87333]'}`}
-                    >
-                      <Settings size={14} />
-                    </button>
-                  </div>
-                  <p className={`text-[10px] font-mono truncate transition-colors ${isAdminView ? 'text-[#A0A095]' : 'text-[#4A4A4A]/40'}`}>{currentUserProfile?.email}</p>
+            <div className="flex items-center gap-3 pl-4 border-l border-orange-100">
+              <div className="text-right hidden sm:block">
+                <p className="text-xs font-bold text-zinc-800">{currentUserProfile?.display_name}</p>
+                <div className="flex gap-2">
+                  <button onClick={() => setShowProfileForm(true)} className="text-[9px] text-orange-600 font-bold hover:underline">設定</button>
+                  <button onClick={handleLogout} className="text-[9px] text-red-500 font-bold hover:underline">登出</button>
                 </div>
               </div>
-
-              <button
-                onClick={handleLogout}
-                className={`w-full flex items-center justify-center gap-2 py-4 rounded-2xl font-black text-[11px] uppercase tracking-[0.2em] transition-all border shadow-sm ${isAdminView ? 'bg-red-900/10 text-red-400 border-red-900/20 hover:bg-red-900/30' : 'bg-red-50 text-red-500 border-red-100 hover:bg-red-500 hover:text-white'}`}
-              >
-                <LogOut size={16} /> 登出系統
-              </button>
+              <div className="w-9 h-9 rounded-full bg-orange-100 flex items-center justify-center text-orange-800 border border-orange-200">
+                <User size={18} />
+              </div>
             </div>
           )}
         </div>
-      </aside>
+      </header>
 
-      {/* Main Container */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* List Column (Side Panel) */}
-        {!['stats', 'ann-admin', 'ann-board', 'wish-admin', 'marketing'].includes(view) && (
-          <section className="w-80 flex-shrink-0 border-r border-[#D2B48C]/10 flex flex-col p-8 bg-[#FDFCF9]">
-            <div className="flex items-center justify-between mb-8">
-              <h2 className="text-xl font-serif font-bold text-[#4A4A4A]">
-                {view === 'events' ? '當前項目' : (view === 'history' ? '歷史回顧' : '參與足跡')}
-              </h2>
-              {isAdmin && (view === 'events' || view === 'history') && (
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleTriggerReminders}
-                    className="w-8 h-8 rounded-full bg-amber-500 text-white flex items-center justify-center hover:bg-amber-600 transition-all shadow-md"
-                    title="立即執行全站催繳檢查"
-                  >
-                    <Bell size={16} />
-                  </button>
-                  <button
-                    onClick={() => {
-                      setEditingEventId(null);
-                      setEventFormData({ name: '', date: '', amount: 0, description: '', reminder_date: '', reminder_deadline: '' });
-                      setShowEventForm(true);
-                    }}
-                    className="w-8 h-8 rounded-full bg-[#4A4A4A] text-white flex items-center justify-center hover:bg-black transition-all shadow-md"
-                    title="發佈新活動"
-                  >
-                    <Plus size={16} />
-                  </button>
+      {/* Main Content */}
+      <main className="flex-1 flex flex-col overflow-hidden relative">
+        <div className="flex-1 overflow-y-auto p-12">
+          {view === 'products' && (
+            <div className="max-w-6xl mx-auto">
+              <header className="mb-12 flex justify-between items-end">
+                <div>
+                  <h2 className="text-4xl font-bold text-zinc-800 mb-2">新鮮農產</h2>
+                  <p className="text-zinc-500">直採產地，新鮮直送</p>
+                </div>
+              </header>
+
+              {/* 最新公告區塊 */}
+              {announcements.length > 0 && (
+                <div className="mb-12 space-y-4">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="bg-orange-600 p-2 rounded-xl text-white shadow-lg shadow-orange-900/10">
+                      <Megaphone size={20} />
+                    </div>
+                    <h3 className="text-xl font-bold text-zinc-800">最新公告</h3>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {announcements.slice(0, 4).map(ann => (
+                      <motion.div
+                        key={ann.id}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        className="bg-white border border-orange-100 p-6 rounded-[24px] shadow-sm hover:border-orange-200 transition-all group"
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-[10px] font-bold text-orange-500 bg-orange-50 px-2 py-0.5 rounded uppercase tracking-wider">{ann.date}</span>
+                          <ChevronRight size={14} className="text-orange-200 group-hover:text-orange-500 transition-colors" />
+                        </div>
+                        <h4 className="font-bold text-zinc-800 mb-1">{ann.title}</h4>
+                        <p className="text-sm text-zinc-500 line-clamp-2 leading-relaxed">{ann.content}</p>
+                      </motion.div>
+                    ))}
+                  </div>
                 </div>
               )}
-            </div>
-            <div className="flex-1 overflow-y-auto space-y-4 pr-2 custom-scrollbar">
-              {(view === 'events' || view === 'history') ? (
-                eventsToShow.map(event => (
-                  <motion.div
-                    key={event.id}
-                    onClick={() => {
-                      setSelectedEvent(event);
-                      if (isAdmin) fetchAdminRegistrations(event.id);
-                    }}
-                    className={`group bg-white p-5 rounded-[24px] border transition-all duration-300 cursor-pointer ${selectedEvent?.id === event.id ? 'border-[#B87333] shadow-md ring-1 ring-[#B87333]/10' : 'border-[#D2B48C]/10 hover:border-[#D2B48C]/40 bg-white/50'}`}
-                  >
-                    <div className="flex justify-between items-start mb-1">
-                      <h3 className="font-bold text-base leading-tight text-[#4A4A4A] flex-1 line-clamp-2">{event.name}</h3>
-                      {new Date(event.date) < today && (
-                        <span className="text-[8px] bg-gray-100 text-gray-400 px-2 py-0.5 rounded-md font-bold ml-2 flex-shrink-0">已結束</span>
-                      )}
-                    </div>
-                    <div className="mt-4 flex justify-between items-center text-[10px] font-bold">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[#4A4A4A]/30 uppercase tracking-widest">{new Date(event.date).toLocaleDateString()}</span>
-                        {isAdmin && (
-                          <div className="flex gap-1 ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button
-                              onClick={(e) => { e.stopPropagation(); openEditEvent(event); }}
-                              className="p-1.5 text-indigo-500 hover:bg-indigo-50 rounded-lg"
-                            >
-                              <Edit3 size={12} />
-                            </button>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); deleteEvent(event.id); }}
-                              className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg"
-                            >
-                              <Trash2 size={12} />
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                      <span className="text-[#B87333] font-serif">${event.amount}</span>
-                    </div>
-                  </motion.div>
-                ))
-              ) : (
-                myRegistrations.map(reg => (
-                  <motion.div
-                    key={reg.id}
-                    onClick={() => handleSelectMyRegistration(reg)}
-                    className={`bg-white p-5 rounded-[24px] border transition-all duration-300 cursor-pointer ${selectedEvent?.id === reg.event_id ? 'border-[#B87333] shadow-md ring-1 ring-[#B87333]/10' : 'border-[#D2B48C]/10 hover:border-[#D2B48C]/40 bg-white/50'}`}
-                  >
-                    <h3 className="font-bold text-[#4A4A4A] text-sm leading-tight">{events.find(e => e.id === reg.event_id)?.name || '讀取中...'}</h3>
-                    <div className="mt-4 flex justify-between items-center">
-                      <span className={`text-[9px] px-2 py-1 rounded-full font-bold uppercase tracking-widest ${reg.payment_status === '已付款' ? 'bg-[#8FBC8F]/10 text-[#8FBC8F]' : 'bg-[#B87333]/10 text-[#B87333]'
-                        }`}>
-                        {reg.payment_status}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                {products.map(p => (
+                  <motion.div key={p.id} whileHover={{ y: -5 }} className="bg-white border border-orange-100 rounded-[32px] p-8 shadow-sm relative overflow-hidden">
+                    <div className="mb-6 flex justify-between items-start">
+                      <span className="bg-orange-50 text-orange-700 px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest">
+                        {p.supplier_name}
                       </span>
-                      <span className="text-[10px] text-[#4A4A4A]/40 font-bold">{new Date(reg.registration_date).toLocaleDateString()}</span>
+                      <p className="text-2xl font-bold text-orange-800">${p.price}<span className="text-xs text-zinc-400 font-normal"> / {p.unit}</span></p>
+                    </div>
+                    <h3 className="text-2xl font-bold text-zinc-800 mb-2">{p.name}</h3>
+                    <p className="text-sm text-zinc-500 mb-6">{p.description || "友善農法栽種，自然鮮甜。"}</p>
+
+                    <div className="flex items-center justify-between text-xs font-bold pt-6 border-t border-orange-50">
+                      <div className="flex items-center gap-2">
+                        <Package size={14} className="text-zinc-400" />
+                        {isAdmin ? (
+                          <span className={p.stock <= p.safety_stock ? "text-red-500 font-bold" : "text-zinc-500"}>
+                            庫存: {p.stock} {p.unit}
+                          </span>
+                        ) : (
+                          p.stock < 10 ? (
+                            <span className="text-red-500 font-bold animate-pulse">
+                              僅剩 {p.stock} {p.unit}
+                            </span>
+                          ) : (
+                            <span className="text-emerald-600 font-medium">庫存充足</span>
+                          )
+                        )}
+                        {isAdmin && p.stock <= p.safety_stock && <AlertTriangle size={14} className="text-red-500 animate-pulse" />}
+                      </div>
                     </div>
                   </motion.div>
-                ))
-              )}
+                ))}
+              </div>
             </div>
-          </section>
-        )}
+          )}
 
-        {/* Content Column */}
-        <section className={`flex-1 p-12 overflow-y-auto relative min-w-0 transition-colors duration-500 ${isAdminView ? 'bg-[#1A1A17] text-[#F5F5F0]' : (['stats', 'ann-admin', 'ann-board'].includes(view) ? 'bg-white' : '')}`}>
-          <AnimatePresence mode="wait">
-            {view === 'stats' ? (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-6xl mx-auto py-8">
-                <div className="mb-12">
-                  <h2 className={`text-4xl font-serif font-bold ${isAdminView ? 'text-[#F5F5F0]' : 'text-[#4A4A4A]'}`}>成員活動分析</h2>
-                  <p className={`${isAdminView ? 'text-[#A0A095]' : 'text-[#4A4A4A]/40'} mt-3 font-bold uppercase tracking-widest`}>Membership Engagement Reports</p>
-                </div>
+          {view === 'my-orders' && (
+            <div className="max-w-4xl mx-auto">
+              <h2 className="text-3xl font-bold mb-8 text-zinc-800">{isAdmin ? "全站顧客訂單總覽" : "我的訂單紀錄"}</h2>
 
-                <div className="grid grid-cols-1 gap-6">
-                  {memberStats.map(member => (
-                    <div key={member.email} className={`${isAdminView ? 'bg-[#242421] border-[#363632]' : 'bg-white border-[#D2B48C]/10'} rounded-[32px] border shadow-sm overflow-hidden transition-all hover:shadow-md`}>
-                      <div className="p-8 flex items-center gap-6">
-                        <div className={`w-16 h-16 ${isAdminView ? 'bg-[#1A1A17]' : 'bg-gray-50'} rounded-2xl flex items-center justify-center text-[#B87333] flex-shrink-0 shadow-inner`}>
-                          <User size={32} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-3">
-                            <h3 className={`text-2xl font-bold ${isAdminView ? 'text-[#F5F5F0]' : 'text-[#4A4A4A]'} truncate`}>{member.display_name}</h3>
-                            <div className="flex gap-2">
-                              {member.is_vip === 1 && (
-                                <span className="bg-pink-500/10 text-pink-400 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest whitespace-nowrap flex items-center gap-1">
-                                  <Heart size={10} fill="currentColor" /> 好顧客
-                                </span>
-                              )}
-                              <span className="bg-[#8FBC8F]/10 text-[#8FBC8F] px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest whitespace-nowrap">已參展: {member.paid_count}</span>
-                              <span className="bg-[#B87333]/10 text-[#B87333] px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest whitespace-nowrap">待處理: {member.pending_count}</span>
-                            </div>
+              <div className="space-y-4">
+                {isAdmin ? (
+                  // 管理員分層顯示
+                  Object.entries(
+                    allOrders.reduce((acc, o) => {
+                      if (!acc[o.user_email]) acc[o.user_email] = [];
+                      acc[o.user_email].push(o);
+                      return acc;
+                    }, {})
+                  ).map(([email, orders]) => (
+                    <div key={email} className="bg-white rounded-[24px] border border-orange-100 shadow-sm overflow-hidden">
+                      <button
+                        onClick={() => setExpandedUser(expandedUser === email ? null : email)}
+                        className="w-full p-6 flex justify-between items-center hover:bg-orange-50/50 transition-colors"
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center text-orange-800">
+                            <User size={20} />
                           </div>
-                          <p className={`text-sm ${isAdminView ? 'text-[#A0A095]' : 'text-[#4A4A4A]/40'} font-mono mt-1`}>{member.email} • {member.birthday || '未填寫生日'}</p>
+                          <div className="text-left">
+                            <p className="font-bold text-zinc-800">{email}</p>
+                            <p className="text-xs text-zinc-400">{orders.length} 筆訂單</p>
+                          </div>
                         </div>
-                        <button
-                          onClick={() => toggleVipStatus(member.email, member.is_vip)}
-                          className={`p-4 rounded-2xl transition-all shadow-sm ${member.is_vip === 1 ? 'bg-pink-500 text-white' : (isAdminView ? 'bg-[#1A1A17] text-[#A0A095]' : 'bg-gray-50 text-[#4A4A4A]/20')}`}
-                          title={member.is_vip === 1 ? "取消好顧客標記" : "標記為好顧客"}
-                        >
-                          <Heart size={20} fill={member.is_vip === 1 ? "currentColor" : "none"} />
-                        </button>
-                        <button
-                          onClick={() => setExpandedMember(expandedMember === member.email ? null : member.email)}
-                          className={`p-4 rounded-2xl transition-all ${expandedMember === member.email ? (isAdminView ? 'bg-[#F5F5F0] text-[#1A1A17]' : 'bg-[#4A4A4A] text-white') : (isAdminView ? 'bg-[#1A1A17] text-[#A0A095]' : 'bg-gray-50 text-[#4A4A4A]/20 hover:text-[#4A4A4A]')} rotate-90`}
-                        >
-                          <ChevronRight size={24} className={`${expandedMember === member.email ? '' : '-rotate-90'}`} />
-                        </button>
-                      </div>
+                        <ChevronRight className={`transition-transform ${expandedUser === email ? 'rotate-90' : ''}`} />
+                      </button>
 
                       <AnimatePresence>
-                        {expandedMember === member.email && (
-                          <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }} className={`overflow-hidden ${isAdminView ? 'bg-[#1A1A17] border-[#363632]' : 'bg-[#FDFCF9] border-[#D2B48C]/10'} border-t`}>
-                            <div className="p-8 space-y-4">
-                              <p className={`text-[10px] font-black ${isAdminView ? 'text-[#A0A095]' : 'text-[#4A4A4A]/30'} uppercase tracking-widest`}>全期參與清單</p>
-                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                {member.registrations.map((reg, idx) => (
-                                  <div key={idx} className={`${isAdminView ? 'bg-[#242421] border-[#363632]' : 'bg-white border-[#D2B48C]/10'} p-5 rounded-[24px] border shadow-sm`}>
-                                    <h4 className={`font-bold ${isAdminView ? 'text-[#F5F5F0]' : 'text-[#4A4A4A]'} leading-tight mb-3 line-clamp-1`}>{reg.event_name}</h4>
-                                    <div className="flex justify-between items-center">
-                                      <span className={`text-[10px] px-2 py-1 rounded-full font-bold ${reg.payment_status === '已付款' ? 'bg-[#8FBC8F]/10 text-[#8FBC8F]' : 'bg-[#B87333]/10 text-[#8FBC8F]/10'
-                                        }`}>{reg.payment_status}</span>
-                                      <span className={`text-[10px] ${isAdminView ? 'text-[#A0A095]' : 'text-[#4A4A4A]/40'} font-bold`}>{new Date(reg.registration_date).toLocaleDateString()}</span>
+                        {expandedUser === email && (
+                          <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }} className="overflow-hidden border-t border-orange-50 bg-orange-50/10">
+                            {orders.map(o => (
+                              <div key={o.id} className="border-b border-orange-50 last:border-none">
+                                <button
+                                  onClick={() => setExpandedOrder(expandedOrder === o.id ? null : o.id)}
+                                  className="w-full px-8 py-4 flex justify-between items-center hover:bg-white transition-colors"
+                                >
+                                  <div className="flex items-center gap-3">
+                                    <Clock size={14} className="text-orange-400" />
+                                    <span className="text-sm font-bold">{new Date(o.created_at).toLocaleString()}</span>
+                                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${o.payment_status === '已付款' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
+                                      {o.payment_status}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-4">
+                                    <span className="text-sm font-bold text-orange-800">${o.total_amount}</span>
+                                    <ChevronRight size={14} className={`transition-transform ${expandedOrder === o.id ? 'rotate-90' : ''}`} />
+                                  </div>
+                                </button>
+
+                                {expandedOrder === o.id && (
+                                  <div className="px-12 pb-6 pt-2 space-y-4">
+                                    <div className="overflow-hidden rounded-xl border border-orange-100 bg-white">
+                                      <table className="w-full text-left text-sm border-collapse">
+                                        <thead>
+                                          <tr className="bg-orange-50/50 text-orange-400 font-bold">
+                                            <th className="px-3 py-2 border-b border-orange-50">產品 (供應商)</th>
+                                            <th className="px-3 py-2 border-b border-orange-50 text-right">單價</th>
+                                            <th className="px-3 py-2 border-b border-orange-50 text-center">數量</th>
+                                            <th className="px-3 py-2 border-b border-orange-50 text-right">小計</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody className="text-zinc-600">
+                                          {o.items.map((it, idx) => (
+                                            <tr key={idx}>
+                                              <td className="px-3 py-2 border-b border-orange-50">
+                                                <div className="font-bold text-zinc-800">{it.product_name}</div>
+                                                <div className="text-[11px] opacity-60">[{it.supplier}]</div>
+                                              </td>
+                                              <td className="px-3 py-2 border-b border-orange-50 text-right">${it.price_at_order} /{it.unit}</td>
+                                              <td className="px-3 py-2 border-b border-orange-50 text-center font-bold text-orange-700">{it.quantity}</td>
+                                              <td className="px-3 py-2 border-b border-orange-50 text-right font-bold text-zinc-800">${it.subtotal}</td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4 text-sm text-zinc-500 bg-white p-6 rounded-xl border border-orange-50 shadow-sm">
+                                      <div>
+                                        <p className="font-bold uppercase opacity-40 mb-1 text-[10px] tracking-widest">付款與運送</p>
+                                        <p className="text-zinc-800 font-medium">{o.payment_method} / {o.receiver_phone}</p>
+                                      </div>
+                                      <div>
+                                        <p className="font-bold uppercase opacity-40 mb-1 text-[10px] tracking-widest">預計出貨</p>
+                                        <p className="text-zinc-800 font-medium">{o.shipping_date || "安排中"}</p>
+                                      </div>
+                                      <div className="col-span-2">
+                                        <p className="font-bold uppercase opacity-40 mb-1 text-[10px] tracking-widest">配送地址</p>
+                                        <p className="text-zinc-800 font-medium">{o.receiver_address}</p>
+                                      </div>
                                     </div>
                                   </div>
-                                ))}
+                                )}
                               </div>
-                            </div>
+                            ))}
                           </motion.div>
                         )}
                       </AnimatePresence>
                     </div>
-                  ))}
-                </div>
-              </motion.div>
-            ) : view === 'marketing' ? (
-              /* 行銷中心管理介面 */
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-6xl mx-auto py-8">
-                <div className="flex justify-between items-center mb-12">
-                  <div>
-                    <h2 className={`text-4xl font-serif font-bold ${isAdminView ? 'text-[#F5F5F0]' : 'text-[#4A4A4A]'}`}>行銷郵件中心</h2>
-                    <p className={`${isAdminView ? 'text-[#A0A095]' : 'text-[#4A4A4A]/40'} mt-3 font-bold uppercase tracking-widest`}>VIP Automated Marketing Scheduler</p>
-                  </div>
-                  <button
-                    onClick={() => { setEditingMarketingId(null); setMarketingFormData({ subject: '', content: '', scheduled_date: new Date().toISOString().split('T')[0], scheduled_time: '09:00' }); setShowMarketingForm(true); }}
-                    className={`px-8 py-4 rounded-3xl font-bold flex items-center gap-2 transition-all shadow-lg ${isAdminView ? 'bg-pink-500 text-white hover:bg-pink-400' : 'bg-pink-600 text-white hover:bg-pink-700'}`}
-                  >
-                    <Plus size={20} /> 新增活動排程
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {marketingMails.map(mail => (
-                    <div key={mail.id} className={`${isAdminView ? 'bg-[#242421] border-[#363632]' : 'bg-white border-[#D2B48C]/10'} rounded-[32px] border shadow-sm p-8 flex flex-col`}>
-                      <div className="flex justify-between items-start mb-4">
-                        <span className={`px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest ${mail.is_sent === 1 ? 'bg-[#8FBC8F]/10 text-[#8FBC8F]' : 'bg-pink-500/10 text-pink-400'
-                          }`}>
-                          {mail.is_sent === 1 ? '已發送' : '排程中'}
+                  ))
+                ) : (
+                  // 一般用戶顯示
+                  myOrders.map(o => (
+                    <div key={o.id} className="bg-white p-8 rounded-[32px] border border-orange-100 shadow-sm">
+                      <div className="flex justify-between items-start mb-6">
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 mb-1">Order #{o.id}</p>
+                          <p className="text-lg font-bold">{new Date(o.created_at).toLocaleDateString()}</p>
+                        </div>
+                        <span className={`px-4 py-1.5 rounded-full text-[10px] font-bold ${o.payment_status === '已付款' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
+                          {o.payment_status}
                         </span>
-                        <div className="flex gap-2">
-                          {mail.is_sent === 0 && (
-                            <button onClick={() => openEditMarketing(mail)} className="p-2 text-indigo-400 hover:bg-indigo-400/10 rounded-xl transition-all">
-                              <Edit3 size={16} />
-                            </button>
-                          )}
-                          <button onClick={() => deleteMarketingMail(mail.id)} className="p-2 text-red-500 hover:bg-red-500/10 rounded-xl transition-all">
-                            <Trash2 size={16} />
-                          </button>
+                      </div>
+                      <div className="overflow-hidden rounded-[24px] border border-orange-100 bg-white mb-6">
+                        <table className="w-full text-left text-[11px] border-collapse">
+                          <thead>
+                            <tr className="bg-orange-50/50 text-orange-400 font-bold">
+                              <th className="px-4 py-3 border-b border-orange-50">產品 (供應商)</th>
+                              <th className="px-4 py-3 border-b border-orange-50 text-right">單價</th>
+                              <th className="px-4 py-3 border-b border-orange-50 text-center">數量</th>
+                              <th className="px-4 py-3 border-b border-orange-50 text-right">小計</th>
+                            </tr>
+                          </thead>
+                          <tbody className="text-zinc-600">
+                            {o.items.map((it, idx) => (
+                              <tr key={idx}>
+                                <td className="px-4 py-3 border-b border-orange-50">
+                                  <div className="font-bold text-zinc-800">{it.product_name}</div>
+                                  <div className="text-[9px] opacity-60">[{it.supplier}]</div>
+                                </td>
+                                <td className="px-4 py-3 border-b border-orange-50 text-right">${it.price_at_order} /{it.unit}</td>
+                                <td className="px-4 py-3 border-b border-orange-50 text-center font-bold text-orange-700">{it.quantity}</td>
+                                <td className="px-4 py-3 border-b border-orange-50 text-right font-bold text-zinc-800">${it.subtotal}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4 text-[10px] text-zinc-500 mb-6 bg-orange-50/30 p-4 rounded-2xl">
+                        <div>
+                          <p className="font-bold uppercase opacity-40 mb-1">付款方式</p>
+                          <p className="text-zinc-800">{o.payment_method}</p>
+                        </div>
+                        <div>
+                          <p className="font-bold uppercase opacity-40 mb-1">聯繫電話</p>
+                          <p className="text-zinc-800">{o.receiver_phone}</p>
+                        </div>
+                        <div className="col-span-2">
+                          <p className="font-bold uppercase opacity-40 mb-1">配送地址</p>
+                          <p className="text-zinc-800">{o.receiver_address}</p>
                         </div>
                       </div>
-                      <h3 className={`text-xl font-bold mb-3 ${isAdminView ? 'text-[#F5F5F0]' : 'text-[#4A4A4A]'}`}>{mail.subject}</h3>
-                      <p className={`text-sm flex-1 ${isAdminView ? 'text-[#A0A095]' : 'text-[#4A4A4A]/60'} line-clamp-3 mb-6`}>{mail.content}</p>
-                      <div className="pt-6 border-t border-[#363632] flex items-center justify-between">
-                        <div className="flex flex-col">
-                          <span className={`text-[11px] font-bold uppercase tracking-widest ${isAdminView ? 'text-[#A0A095]' : 'text-[#4A4A4A]/40'}`}>日期: {mail.scheduled_date}</span>
-                          <span className="text-xl font-serif font-bold text-pink-400">{mail.scheduled_time}</span>
+                      <div className="border-t border-orange-50 pt-4 flex justify-between items-center">
+                        <span className="text-xs text-zinc-400 font-bold">預計出貨: {o.shipping_date || "安排中"}</span>
+                        <p className="text-xl font-bold text-orange-800">Total: ${o.total_amount}</p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+
+          {view === 'cart' && (
+            <div className="max-w-4xl mx-auto pb-20">
+              <header className="mb-12 flex justify-between items-end">
+                <div>
+                  <h2 className="text-4xl font-bold text-zinc-800 mb-2">我的購物車</h2>
+                  <p className="text-zinc-500">確認品項後即可進行結帳</p>
+                </div>
+                <button
+                  onClick={handleClearCart}
+                  className="flex items-center gap-2 text-zinc-400 hover:text-red-500 transition-all font-bold text-sm bg-zinc-100/50 hover:bg-red-50 px-5 py-2.5 rounded-2xl"
+                >
+                  <Trash2 size={16} /> 清空購物車
+                </button>
+              </header>
+
+              {cartItems.length > 0 ? (
+                <div className="bg-white rounded-[40px] border border-orange-100 shadow-xl overflow-hidden p-8">
+                  <table className="w-full text-left mb-8">
+                    <thead>
+                      <tr className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 border-b border-orange-50">
+                        <th className="pb-6 px-4">產品內容</th>
+                        <th className="pb-6 text-right px-4">單價</th>
+                        <th className="pb-6 text-center px-4">數量</th>
+                        <th className="pb-6 text-right px-4">小計</th>
+                        <th className="pb-6 text-center px-4">操作</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-orange-50 text-zinc-700">
+                      {cartItems.map((it, idx) => (
+                        <tr key={idx} className="hover:bg-orange-50/20 transition-colors">
+                          <td className="py-6 px-4">
+                            <div className="flex items-center gap-2">
+                              <p className="font-bold text-lg">{it.product_name}</p>
+                              {giftIds.has(it.product_id) && (
+                                <span className="bg-orange-100 text-orange-600 text-[10px] font-bold px-2 py-0.5 rounded-full ring-1 ring-orange-200">
+                                  贈品
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs opacity-40">[{it.supplier}]</p>
+                          </td>
+                          <td className="py-6 text-right px-4 font-medium font-mono">
+                            {giftIds.has(it.product_id) ? (
+                              <span className="line-through text-zinc-400 opacity-50 text-sm">${it.price}</span>
+                            ) : (
+                              `$${it.price}`
+                            )} /{it.unit}
+                          </td>
+                          <td className="py-6 text-center px-4">
+                            <div className="flex items-center justify-center gap-3">
+                              <button
+                                onClick={() => updateCartQuantity(it.product_id, Number(it.quantity) - 1)}
+                                className="w-8 h-8 rounded-full border border-orange-200 flex items-center justify-center text-orange-600 hover:bg-orange-50 transition-colors"
+                              >
+                                <Minus size={14} />
+                              </button>
+                              <span className="bg-orange-50 text-orange-800 px-4 py-2 rounded-xl font-bold min-w-[3rem]">{it.quantity}</span>
+                              <button
+                                onClick={() => updateCartQuantity(it.product_id, Number(it.quantity) + 1)}
+                                className="w-8 h-8 rounded-full border border-orange-200 flex items-center justify-center text-orange-600 hover:bg-orange-50 transition-colors"
+                              >
+                                <Plus size={14} />
+                              </button>
+                            </div>
+                          </td>
+                          <td className="py-6 text-right px-4 font-bold text-lg font-mono text-orange-900">
+                            ${giftIds.has(it.product_id) ? 0 : (it.price * it.quantity).toFixed(0)}
+                          </td>
+                          <td className="py-6 text-center px-4">
+                            <button
+                              onClick={() => updateCartQuantity(it.product_id, 0)}
+                              className="text-zinc-300 hover:text-red-500 transition-colors p-2"
+                              title="移除此項目"
+                            >
+                              <Trash2 size={18} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+
+                  <div className="bg-orange-50/50 rounded-[32px] p-8 flex justify-between items-center">
+                    <div>
+                      <p className="text-sm font-medium text-zinc-500 mb-1">本次結帳總金額</p>
+                      <p className="text-4xl font-black text-orange-800 font-mono">
+                        ${cartItems.reduce((acc, it) => acc + (giftIds.has(it.product_id) ? 0 : it.price * it.quantity), 0).toFixed(0)}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        const total = cartItems.reduce((acc, it) =>
+                          acc + (giftIds.has(it.product_id) ? 0 : it.price * it.quantity), 0
+                        );
+                        setConfirmOrderData({
+                          items: cartItems,
+                          total_amount: total
+                        });
+                        setShippingInfo({
+                          phone: currentUserProfile?.phone || '',
+                          address: currentUserProfile?.shipping_address || ''
+                        });
+                        setIsChatMinimized(false);
+                        // 如果在手機版可能需要滾動到對話視窗
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }}
+                      className="bg-orange-800 text-white px-12 py-5 rounded-[24px] font-bold text-lg hover:shadow-2xl hover:bg-orange-900 transition-all flex items-center gap-2 transform active:scale-95"
+                    >
+                      <CheckCircle size={20} /> 前往結帳
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-32 bg-white rounded-[40px] border border-orange-100 border-dashed">
+                  <div className="w-20 h-20 bg-orange-50 rounded-full flex items-center justify-center mx-auto mb-6 text-orange-300">
+                    <ShoppingCart size={40} />
+                  </div>
+                  <h3 className="text-2xl font-bold text-zinc-300">您的購物車是空的</h3>
+                  <button onClick={() => setView('products')} className="mt-6 text-orange-600 font-bold hover:underline">去產品市集逛逛吧</button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {view === 'shipping' && (
+            <div className="max-w-6xl mx-auto">
+              <h2 className="text-3xl font-bold mb-8 text-zinc-800">出貨管理控制台</h2>
+              <div className="grid grid-cols-1 gap-4">
+                {allOrders.map(o => (
+                  <div key={o.id} className="bg-white border border-orange-100 p-8 rounded-[32px] shadow-sm space-y-6">
+                    <div className="flex items-center justify-between pb-4 border-b border-orange-50">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-orange-100 rounded-2xl flex items-center justify-center text-orange-800">
+                          <Package size={24} />
                         </div>
-                        <div className="flex items-center gap-2 text-[10px] font-bold text-[#B87333]">
-                          對象: 指定 VIP 好顧客
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Order #{o.id}</p>
+                          <p className="font-bold text-zinc-800">{o.user_email}</p>
                         </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <span className={`px-4 py-1.5 rounded-full text-[10px] font-bold tracking-widest uppercase ${o.status === '已出貨' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'
+                          }`}>
+                          {o.status}
+                        </span>
+                        {o.status !== '已出貨' && o.status !== '已取消' && (
+                          <button
+                            onClick={() => handleShipOrder(o.id)}
+                            className="bg-orange-600 text-white px-4 py-1.5 rounded-full text-[10px] font-bold tracking-widest uppercase hover:bg-orange-700 transition-colors shadow-sm"
+                          >
+                            確認出貨 (扣實體庫存)
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex gap-4 items-center">
+                      <div className="text-right">
+                        <p className="text-[10px] font-bold text-zinc-400 uppercase mb-1">支付狀態</p>
+                        <select
+                          value={o.payment_status}
+                          onChange={(e) => updatePaymentStatus(o.id, e.target.value)}
+                          className="bg-orange-50 border-orange-100 rounded-lg text-sm font-bold text-orange-800 p-2"
+                        >
+                          <option>待付款</option>
+                          <option>已付款</option>
+                        </select>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[10px] font-bold text-zinc-400 uppercase mb-1">預計出貨</p>
+                        <input
+                          type="date"
+                          value={o.shipping_date || ""}
+                          onChange={(e) => updateShipping(o.id, e.target.value)}
+                          className="bg-white border border-orange-200 rounded-lg text-sm p-2 text-zinc-800 focus:ring-2 focus:ring-orange-200"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="overflow-hidden rounded-2xl border border-orange-50 bg-orange-50/10">
+                      <table className="w-full text-left text-base border-collapse">
+                        <thead>
+                          <tr className="bg-orange-50/50 text-orange-400 font-bold">
+                            <th className="px-4 py-3 border-b border-orange-50">產品 (供應商)</th>
+                            <th className="px-4 py-3 border-b border-orange-50 text-right">單價</th>
+                            <th className="px-4 py-3 border-b border-orange-50 text-center">數量</th>
+                            <th className="px-4 py-3 border-b border-orange-50 text-right">小計</th>
+                          </tr>
+                        </thead>
+                        <tbody className="text-zinc-600">
+                          {o.items.map((it, idx) => (
+                            <tr key={idx} className="bg-white/50">
+                              <td className="px-4 py-3 border-b border-orange-50">
+                                <div className="font-bold text-zinc-800">{it.product_name}</div>
+                                <div className="text-xs opacity-60">[{it.supplier}]</div>
+                              </td>
+                              <td className="px-4 py-3 border-b border-orange-50 text-right">${it.price_at_order} /{it.unit}</td>
+                              <td className="px-4 py-3 border-b border-orange-50 text-center font-bold text-orange-700">{it.quantity}</td>
+                              <td className="px-4 py-3 border-b border-orange-50 text-right font-bold text-zinc-800">${it.subtotal}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className="flex justify-between items-center pt-2">
+                      <div className="flex gap-8 text-[18px] text-zinc-700 font-medium">
+                        <span><User size={18} className="inline mr-2 opacity-40 text-orange-800" /> {o.receiver_phone}</span>
+                        <span><Truck size={18} className="inline mr-2 opacity-40 text-orange-800" /> {o.receiver_address}</span>
+                        <span className="bg-orange-100 text-orange-800 px-3 py-1 rounded-full font-bold text-sm self-center">{o.payment_method}</span>
+                      </div>
+                      <p className="text-4xl font-black text-orange-800">Total: ${o.total_amount}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {view === 'products-admin' && (
+            <div className="max-w-6xl mx-auto">
+              <div className="flex justify-between items-center mb-8">
+                <h2 className="text-3xl font-bold">庫存與產品設定</h2>
+                <button onClick={() => setShowProductForm(true)} className="bg-orange-600 px-6 py-3 rounded-xl font-bold">+ 新增產品</button>
+              </div>
+              <table className="w-full text-left">
+                <thead className="text-zinc-500 uppercase text-[10px] tracking-widest">
+                  <tr>
+                    <th className="pb-4">產品名稱</th>
+                    <th className="pb-4">供應商</th>
+                    <th className="pb-4">可購買 (預扣)</th>
+                    <th className="pb-4">實體庫存</th>
+                    <th className="pb-4">安全線</th>
+                    <th className="pb-4">單價</th>
+                    <th className="pb-4">操作</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-800">
+                  {products.map(p => (
+                    <tr key={p.id}>
+                      <td className="py-4 font-bold">{p.name}</td>
+                      <td className="py-4">{p.supplier_name}</td>
+                      <td className={`py-4 font-bold ${p.available_stock <= p.safety_stock ? "text-orange-500" : "text-green-600"}`}>{p.available_stock}</td>
+                      <td className={`py-4 ${p.stock <= p.safety_stock ? "text-red-500" : "text-zinc-400"}`}>{p.stock}</td>
+                      <td className="py-4 text-zinc-500">{p.safety_stock}</td>
+                      <td className="py-4">${p.price}</td>
+                      <td className="py-4">
+                        <button className="p-2 text-zinc-500 hover:text-white" onClick={() => {
+                          setEditingProductId(p.id);
+                          setProductFormData(p);
+                          setShowProductForm(true);
+                        }}><Edit3 size={16} /></button>
+                        <button className="p-2 text-red-500 hover:text-red-400 ml-2" onClick={() => {
+                          setLossFormData({ ...lossFormData, p_id: p.id });
+                          setShowLossForm(true);
+                        }} title="紀錄損耗"><Trash2 size={16} /></button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {view === 'losses-admin' && (
+            <div className="max-w-6xl mx-auto">
+              <h2 className="text-3xl font-bold mb-8 text-white">產品損耗紀錄中心</h2>
+              <div className="bg-zinc-900 border border-zinc-800 rounded-[32px] overflow-hidden">
+                <table className="w-full text-left">
+                  <thead className="bg-zinc-950 text-zinc-500 uppercase text-[10px] tracking-widest">
+                    <tr>
+                      <th className="p-6">日期</th>
+                      <th className="p-6">產品</th>
+                      <th className="p-6">供應商</th>
+                      <th className="p-6">損耗數量</th>
+                      <th className="p-6">原因</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-800">
+                    {losses.map(l => (
+                      <tr key={l.id} className="hover:bg-zinc-800/50 transition-colors">
+                        <td className="p-6 text-zinc-400">{l.loss_date}</td>
+                        <td className="p-6 font-bold">{l.product_name}</td>
+                        <td className="p-6 text-zinc-500">{l.supplier_name}</td>
+                        <td className="p-6 text-red-400">-{l.quantity}</td>
+                        <td className="p-6"><span className="bg-zinc-800 px-3 py-1 rounded-full text-[10px]">{l.reason}</span></td>
+                      </tr>
+                    ))}
+                    {losses.length === 0 && (
+                      <tr>
+                        <td colSpan="5" className="p-12 text-center text-zinc-600">目前尚無損耗紀錄</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {view === 'announcements-admin' && (
+            <div className="max-w-6xl mx-auto">
+              <div className="flex justify-between items-center mb-8">
+                <h2 className="text-3xl font-bold text-white">公告管理中心</h2>
+                <button
+                  onClick={() => { setEditingAnnId(null); setAnnFormData({ title: '', content: '', date: new Date().toISOString().split('T')[0] }); setShowAnnForm(true); }}
+                  className="bg-orange-600 hover:bg-orange-700 text-white px-6 py-3 rounded-2xl font-bold flex items-center gap-2 transition-all"
+                >
+                  <Plus size={18} /> 發布新公告
+                </button>
+              </div>
+              <div className="grid grid-cols-1 gap-4">
+                {announcements.map(ann => (
+                  <div key={ann.id} className="bg-zinc-900 border border-zinc-800 p-6 rounded-[24px] flex items-center justify-between group hover:border-orange-900/50 transition-all">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <span className="text-[10px] font-bold text-orange-500 bg-orange-500/10 px-2 py-0.5 rounded uppercase tracking-widest">{ann.date}</span>
+                        <h3 className="font-bold text-zinc-100">{ann.title}</h3>
+                      </div>
+                      <p className="text-sm text-zinc-500 line-clamp-1">{ann.content}</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => { setEditingAnnId(ann.id); setAnnFormData({ title: ann.title, content: ann.content, date: ann.date }); setShowAnnForm(true); }}
+                        className="p-3 bg-zinc-800 hover:bg-zinc-700 rounded-xl text-zinc-400 hover:text-white transition-all"
+                      >
+                        <Edit3 size={18} />
+                      </button>
+                      <button
+                        onClick={() => deleteAnn(ann.id)}
+                        className="p-3 bg-red-900/20 hover:bg-red-900/40 rounded-xl text-red-400 transition-all"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {announcements.length === 0 && <p className="text-center py-20 text-zinc-600">目前的公告列表為空</p>}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className={`fixed bottom-8 right-8 flex flex-col shadow-2xl overflow-hidden bg-white border border-orange-100 transition-all duration-500 ease-in-out z-50 ${isChatMinimized ? 'w-16 h-16 rounded-full shadow-lg' : 'w-[400px] h-[650px] rounded-[32px]'}`}>
+          <div
+            className={`bg-orange-800 text-white flex items-center cursor-pointer hover:bg-orange-900 transition-all duration-500 select-none ${isChatMinimized ? 'w-full h-full justify-center' : 'p-5 justify-between'}`}
+            onClick={() => setIsChatMinimized(!isChatMinimized)}
+          >
+            <h3 className={`font-bold flex items-center gap-2 ${isChatMinimized ? 'w-full h-full flex items-center justify-center' : ''}`}>
+              <div className={`${isChatMinimized ? 'flex items-center justify-center' : 'bg-white/20 p-1.5 rounded-lg'}`}>
+                <MessageSquare size={isChatMinimized ? 24 : 18} className="text-white" />
+              </div>
+              {!isChatMinimized && <span>農小助 (Llama 3.3)</span>}
+              {!isChatMinimized && <ChevronRight size={16} className="rotate-90" />}
+            </h3>
+            {!isChatMinimized && (
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] bg-white/20 px-2 py-1 rounded-full backdrop-blur-sm">Groq AI</span>
+              </div>
+            )}
+          </div>
+
+          <AnimatePresence mode="wait">
+            {!isChatMinimized && (
+              <motion.div
+                key="chat-content"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="flex flex-col flex-1 overflow-hidden"
+              >
+                <div className="flex-1 overflow-y-auto p-6 bg-orange-50/20 space-y-4">
+                  <div className="bg-white p-5 rounded-3xl rounded-tl-none border border-orange-100 shadow-sm">
+                    <p className="text-zinc-800 font-bold mb-3 flex items-center gap-2">
+                      <span className="text-xl">👨‍🌾</span> 您好！我是您的農產特助。
+                    </p>
+                    <p className="text-zinc-500 text-[13px] leading-relaxed mb-4">
+                      除了幫您下單，我還能為您媒合當季最鮮甜的農產與專屬優惠！您可以試試點擊下方的建議：
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        { text: "現在有什麼滿額贈品或限時優惠？💰", icon: "🎁" },
+                        { text: "推薦今天最新鮮的當季蔬菜 🥬", icon: "✨" },
+                        { text: "我想再訂一次之前的訂單 📋", icon: "🔄" },
+                        { text: "查詢我的購物車總金額 💰", icon: "🛒" }
+                      ].map((btn, i) => (
+                        <button
+                          key={i}
+                          onClick={() => sendMessage(btn.text)}
+                          className="bg-orange-50 hover:bg-orange-100 text-orange-800 text-[11px] font-bold px-3 py-2 rounded-xl border border-orange-200/50 transition-all flex items-center gap-1.5 shadow-sm active:scale-95"
+                        >
+                          <span className="text-sm">{btn.icon}</span> {btn.text}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {chatHistory.map((chat, idx) => (
+                    <div key={idx} className={`flex ${chat.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                      <div className={`max-w-[85%] p-4 rounded-2xl text-sm whitespace-pre-wrap ${chat.role === 'user'
+                        ? 'bg-orange-800 text-white rounded-tr-none'
+                        : 'bg-white border border-orange-100 text-zinc-700 rounded-tl-none shadow-sm'
+                        }`}>
+                        <div className="prose prose-sm max-w-none prose-zinc">
+                          <ReactMarkdown components={{
+                            p: ({ children }) => <p className="mb-2 last:mb-0 leading-relaxed">{children}</p>,
+                            strong: ({ children }) => <strong className="font-bold text-orange-950">{children}</strong>,
+                            ul: ({ children }) => <ul className="list-disc ml-4 mb-2 space-y-1">{children}</ul>,
+                            ol: ({ children }) => <ol className="list-decimal ml-4 mb-2 space-y-1">{children}</ol>,
+                            li: ({ children }) => <li className="text-[13px]">{children}</li>,
+                            h3: ({ children }) => <h3 className="text-base font-bold text-orange-900 mt-2 mb-1">{children}</h3>
+                          }}>
+                            {chat.content}
+                          </ReactMarkdown>
+                        </div>
+
+                        {chat.role === 'assistant' && chat.intent === 'ORDER' && chat.data?.items?.length > 0 && (
+                          <div className="mt-4 overflow-hidden rounded-xl border border-orange-200 bg-white shadow-sm">
+                            <div className="bg-orange-50 px-4 py-2 border-b border-orange-200">
+                              <p className="font-bold text-orange-800 text-xs">特助建議採購方案</p>
+                            </div>
+                            <table className="w-full text-left text-[11px] border-collapse">
+                              <thead>
+                                <tr className="bg-orange-50/50 text-orange-400 font-bold uppercase tracking-wider">
+                                  <th className="px-3 py-2 border-b border-orange-100">產品 (供應商)</th>
+                                  <th className="px-3 py-2 border-b border-orange-100 text-right">單價</th>
+                                  <th className="px-3 py-2 border-b border-orange-100 text-center">數量</th>
+                                  <th className="px-3 py-2 border-b border-orange-100 text-right">小計</th>
+                                </tr>
+                              </thead>
+                              <tbody className="text-zinc-600">
+                                {chat.data.items.map((it, i) => (
+                                  <tr key={i} className="hover:bg-orange-50/30 transition-all">
+                                    <td className="px-3 py-2 border-b border-orange-50">
+                                      <div className="font-medium text-zinc-800">{it.product_name}</div>
+                                      <div className="text-[9px] opacity-60">[{it.supplier}]</div>
+                                    </td>
+                                    <td className="px-3 py-2 border-b border-orange-50 text-right">${it.price} /{it.unit}</td>
+                                    <td className="px-3 py-2 border-b border-orange-50 text-center font-bold text-orange-700">{it.quantity}</td>
+                                    <td className="px-3 py-2 border-b border-orange-50 text-right font-bold text-zinc-800">${it.subtotal}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                            <div className="px-4 py-3 bg-white flex justify-between items-center">
+                              <div className="text-xs">
+                                <span className="opacity-50">本次訂單總計: </span>
+                                <span className="font-bold text-orange-800 text-base ml-1">${chat.data.total_amount}</span>
+                              </div>
+                              <button
+                                onClick={() => { setConfirmOrderData(chat.data); setShippingInfo(chat.data.default_shipping); }}
+                                className="px-4 py-2 bg-orange-600 text-white rounded-lg font-bold text-xs hover:bg-orange-700 transition-all shadow-md shadow-orange-900/10"
+                              >
+                                立即結帳
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}
-                  {marketingMails.length === 0 && (
-                    <div className="col-span-full py-20 text-center opacity-30">
-                      <Mail size={48} className="mx-auto mb-4" />
-                      <p className="font-serif">尚無排程紀錄</p>
+
+                  {loading && (
+                    <div className="flex justify-start">
+                      <div className="bg-white p-4 rounded-2xl rounded-tl-none border border-orange-100 flex gap-1">
+                        <div className="w-1.5 h-1.5 bg-orange-300 rounded-full animate-bounce" />
+                        <div className="w-1.5 h-1.5 bg-orange-300 rounded-full animate-bounce [animation-delay:0.2s]" />
+                        <div className="w-1.5 h-1.5 bg-orange-300 rounded-full animate-bounce [animation-delay:0.4s]" />
+                      </div>
+                    </div>
+                  )}
+
+                  {confirmOrderData && (
+                    <div className="bg-orange-800 text-white p-5 rounded-3xl shadow-xl space-y-4">
+                      <p className="font-bold text-lg border-b border-orange-700 pb-2">最後結帳確認</p>
+                      <div className="space-y-3 bg-orange-900/40 p-3 rounded-2xl border border-orange-700">
+                        <div>
+                          <label className="text-[10px] font-bold opacity-60 uppercase block mb-1">付款方式</label>
+                          <select
+                            value={paymentMethod}
+                            onChange={e => setPaymentMethod(e.target.value)}
+                            className="w-full bg-orange-800 border-none rounded-lg text-xs p-2 text-white"
+                          >
+                            <option>現金</option>
+                            <option>轉帳</option>
+                            <option>LINE Pay</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold opacity-60 uppercase block mb-1">收件電話</label>
+                          <input
+                            type="text"
+                            value={shippingInfo.phone}
+                            onChange={e => setShippingInfo({ ...shippingInfo, phone: e.target.value })}
+                            className="w-full bg-orange-800 border-none rounded-lg text-xs p-2 text-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold opacity-60 uppercase block mb-1">配送地址</label>
+                          <input
+                            type="text"
+                            value={shippingInfo.address}
+                            onChange={e => setShippingInfo({ ...shippingInfo, address: e.target.value })}
+                            className="w-full bg-orange-800 border-none rounded-lg text-xs p-2 text-white"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex gap-2 pt-2">
+                        <button onClick={() => setConfirmOrderData(null)} className="flex-1 py-3 bg-red-900/50 rounded-xl font-bold text-xs hover:bg-red-900 transition-all">取消</button>
+                        <button onClick={handleConfirmOrder} className="flex-2 py-3 bg-green-500 rounded-xl font-bold text-xs text-green-950 hover:bg-green-400 transition-all">確認下單</button>
+                      </div>
                     </div>
                   )}
                 </div>
-              </motion.div>
-            ) : view === 'ann-admin' ? (
-              /* 公告管理介面 */
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-6xl mx-auto py-8">
-                <div className="flex justify-between items-center mb-12">
-                  <div>
-                    <h2 className={`text-4xl font-serif font-bold ${isAdminView ? 'text-[#F5F5F0]' : 'text-[#4A4A4A]'}`}>公告中心管理</h2>
-                    <p className={`${isAdminView ? 'text-[#A0A095]' : 'text-[#4A4A4A]/40'} mt-3 font-bold uppercase tracking-widest`}>Announcement Control Center</p>
-                  </div>
-                  <button
-                    onClick={() => { setEditingAnnId(null); setAnnFormData({ title: '', content: '', date: new Date().toISOString().split('T')[0], event_link_id: null }); setShowAnnForm(true); }}
-                    className={`px-8 py-4 rounded-3xl font-bold flex items-center gap-2 transition-all shadow-lg ${isAdminView ? 'bg-[#F5F5F0] text-[#1A1A17] hover:bg-white' : 'bg-[#4A4A4A] text-white hover:bg-black'}`}
-                  >
-                    <Plus size={20} /> 發佈新公告
+                <form onSubmit={handleChatOrder} className="p-4 border-t border-orange-100 flex gap-2 bg-white">
+                  <input
+                    type="text"
+                    value={chatMessage}
+                    onChange={(e) => setChatMessage(e.target.value)}
+                    placeholder="輸入您的需求..."
+                    className="flex-1 bg-orange-50 border-none rounded-xl p-3 text-sm focus:ring-2 focus:ring-orange-200 transition-all text-zinc-800"
+                  />
+                  <button type="submit" disabled={loading} className="bg-orange-800 text-white p-3 rounded-xl hover:bg-orange-900 transition-all disabled:opacity-50 flex items-center justify-center">
+                    <Send size={18} />
                   </button>
-                </div>
-
-                <div className="space-y-6">
-                  {announcements.map(ann => (
-                    <div key={ann.id} className={`${isAdminView ? 'bg-[#242421] border-[#363632]' : 'bg-white border-[#D2B48C]/10'} p-8 rounded-[32px] border shadow-sm flex items-center justify-between group`}>
-                      <div className="flex-1 min-w-0 mr-8">
-                        <div className="flex items-center gap-4 mb-2">
-                          <span className={`text-[10px] font-mono px-3 py-1 rounded-full font-bold uppercase tracking-widest ${isAdminView ? 'bg-[#1A1A17] text-[#A0A095]' : 'bg-stone-100 text-[#4A4A4A]/40'}`}>{ann.date}</span>
-                          <h3 className={`text-xl font-bold ${isAdminView ? 'text-[#F5F5F0]' : 'text-[#4A4A4A]'} truncate`}>{ann.title}</h3>
-                        </div>
-                        <p className={`text-sm line-clamp-1 ${isAdminView ? 'text-[#A0A095]' : 'text-[#4A4A4A]/60'}`}>{ann.content}</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => { setEditingAnnId(ann.id); setAnnFormData({ title: ann.title, content: ann.content, date: ann.date, event_link_id: ann.event_link_id }); setShowAnnForm(true); }}
-                          className={`p-3 rounded-2xl transition-all ${isAdminView ? 'bg-[#1A1A17] text-indigo-400 hover:bg-indigo-400 hover:text-white' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white'}`}
-                        >
-                          <Edit3 size={18} />
-                        </button>
-                        <button
-                          onClick={() => deleteAnnouncement(ann.id)}
-                          className={`p-3 rounded-2xl transition-all ${isAdminView ? 'bg-[#1A1A17] text-red-400 hover:bg-red-400 hover:text-white' : 'bg-red-50 text-red-600 hover:bg-red-600 hover:text-white'}`}
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </motion.div>
-            ) : view === 'wish-admin' ? (
-              /* 許願池管理介面 */
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-6xl mx-auto py-8">
-                <div className="mb-12">
-                  <h2 className={`text-4xl font-serif font-bold ${isAdminView ? 'text-[#F5F5F0]' : 'text-[#4A4A4A]'}`}>許願池管理</h2>
-                  <p className={`${isAdminView ? 'text-[#A0A095]' : 'text-[#4A4A4A]/40'} mt-3 font-bold uppercase tracking-widest`}>Community Wishes & Feedback</p>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {wishes.map(wish => (
-                    <div key={wish.id} className={`${isAdminView ? 'bg-[#242421] border-[#363632]' : 'bg-white border-[#D2B48C]/10'} p-8 rounded-[32px] border shadow-sm relative overflow-hidden group`}>
-                      <div className="absolute top-0 right-0 p-4">
-                        <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${wish.category === '活動希望' ? 'bg-indigo-500/20 text-indigo-400' : 'bg-orange-500/20 text-orange-400'}`}>
-                          {wish.category}
-                        </span>
-                      </div>
-                      <p className={`text-lg leading-relaxed mb-6 font-medium italic ${isAdminView ? 'text-[#F5F5F0]' : 'text-[#4A4A4A]'}`}>"{wish.content}"</p>
-                      <div className={`flex items-center gap-3 pt-6 border-t ${isAdminView ? 'border-[#363632]' : 'border-[#D2B48C]/5'}`}>
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[#B87333] ${isAdminView ? 'bg-[#1A1A17]' : 'bg-gray-50'}`}>
-                          <User size={14} />
-                        </div>
-                        <span className={`text-[10px] font-bold uppercase tracking-widest ${isAdminView ? 'text-[#A0A095]' : 'text-[#4A4A4A]/40'}`}>{wish.user_email} • {new Date(wish.created_at).toLocaleDateString()}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </motion.div>
-            ) : (selectedEvent || view === 'ann-board') ? (
-              <motion.div
-                key={selectedEvent?.id || 'ann-board'}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="max-w-4xl"
-              >
-                {view === 'ann-board' ? (
-                  <div className="space-y-12">
-                    <div className="mb-16">
-                      <h2 className="text-5xl font-serif font-bold text-[#4A4A4A] leading-tight">佈告欄</h2>
-                      <p className="text-[#4A4A4A]/40 mt-3 font-bold uppercase tracking-widest">Platform Announcements & Updates</p>
-                    </div>
-
-                    <div className="space-y-10">
-                      {announcements.map(ann => (
-                        <div key={ann.id} className="bg-[#FDFCF9] p-10 rounded-[40px] border border-[#D2B48C]/10 shadow-sm relative overflow-hidden group">
-                          <div className="absolute top-0 right-0 w-32 h-32 bg-[#B87333]/5 rounded-bl-[100px] -z-0 transition-all group-hover:scale-110" />
-                          <div className="relative z-10">
-                            <span className="text-[10px] font-black text-[#B87333] uppercase tracking-[0.3em] mb-4 block">{ann.date}</span>
-                            <h3 className="text-3xl font-serif font-bold text-[#4A4A4A] mb-6">{ann.title}</h3>
-                            <p className="text-[#4A4A4A]/70 leading-relaxed whitespace-pre-line text-lg mb-8">
-                              {ann.content}
-                            </p>
-                            {ann.event_link_id && (
-                              <button
-                                onClick={() => {
-                                  const target = events.find(e => e.id === ann.event_link_id);
-                                  if (target) {
-                                    setView('events');
-                                    setSelectedEvent(target);
-                                  }
-                                }}
-                                className="flex items-center gap-2 text-[#8FBC8F] font-bold border-b border-[#8FBC8F] pb-1 hover:gap-4 transition-all"
-                              >
-                                查看關聯活動詳情 <ChevronRight size={16} />
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                      {announcements.length === 0 && (
-                        <div className="text-center py-20 bg-gray-50 rounded-[40px] border-2 border-dashed border-gray-200">
-                          <p className="text-[#4A4A4A]/40 font-bold uppercase tracking-widest italic">目前尚無公告內容</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <div className="flex items-center gap-3 text-[#B87333] font-bold text-[10px] mb-4 uppercase tracking-[0.2em]">
-                      <span className="bg-[#B87333]/10 px-3 py-1 rounded-full">System Record</span>
-                      <span>•</span>
-                      <span>{new Date(selectedEvent.date).toLocaleDateString()}</span>
-                    </div>
-                    <h2 className="text-5xl font-serif font-bold text-[#4A4A4A] leading-[1.15] mb-8">{selectedEvent.name}</h2>
-                    <div className="prose prose-lg prose-stone max-w-none">
-                      <p className="text-[#4A4A4A]/70 text-xl leading-relaxed whitespace-pre-line border-l-4 border-[#8FBC8F]/30 pl-6 italic mb-12">
-                        {selectedEvent.description}
-                      </p>
-                    </div>
-
-                    <div className="flex items-center justify-between p-8 bg-white rounded-[32px] border border-[#D2B48C]/10 shadow-sm mb-12">
-                      <div className="flex flex-col">
-                        <span className="text-[10px] text-[#4A4A4A]/40 font-bold uppercase tracking-widest mb-1">費用 / 點數相關</span>
-                        <span className="text-4xl font-serif font-bold text-[#B87333]">${selectedEvent.amount}</span>
-                      </div>
-
-                      {!isAdmin && new Date(selectedEvent.date) >= today && (
-                        <>
-                          {userRegInfo ? (
-                            <div className="flex items-center gap-3 bg-[#F9F7F2] border border-[#8FBC8F]/30 px-8 py-4 rounded-[20px] font-black text-lg text-[#8FBC8F] shadow-sm">
-                              <CheckCircle size={24} /> {userRegInfo.payment_status === '已付款' ? '已報名 (已付款)' : '已報名 (待付款)'}
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => {
-                                if (!token) return handleLogin();
-                                setRegFormData({
-                                  user_name: currentUserProfile?.display_name || '',
-                                  birthday: currentUserProfile?.birthday || '',
-                                  participant_count: 1,
-                                  notes: ''
-                                });
-                                setShowRegForm(true);
-                              }}
-                              className="bg-[#8FBC8F] text-white px-12 py-4 rounded-[20px] font-bold text-lg shadow-xl shadow-green-100 hover:bg-[#76a076] active:scale-95 transition-all flex items-center gap-2"
-                            >
-                              <Plus size={20} /> 立即報名
-                            </button>
-                          )}
-                        </>
-                      )}
-
-                      {!isAdmin && new Date(selectedEvent.date) < today && (
-                        <span className="bg-gray-100 text-gray-400 px-8 py-4 rounded-[20px] font-bold text-lg cursor-not-allowed border border-gray-200">活動已回顧</span>
-                      )}
-                    </div>
-
-                    {isAdmin && (
-                      <div className="mt-16 pt-16 border-t border-[#D2B48C]/10">
-                        <div className="flex justify-between items-end mb-10">
-                          <div>
-                            <h3 className="text-3xl font-serif font-bold text-[#4A4A4A]">參與名冊</h3>
-                            <p className="text-sm text-[#4A4A4A]/40 mt-2 font-bold uppercase tracking-widest">Administrative Access Only</p>
-                          </div>
-                          <div className="bg-[#8FBC8F]/5 px-5 py-2 rounded-2xl border border-[#8FBC8F]/20">
-                            <span className="text-xl font-bold text-[#8FBC8F]">{registrations.length}</span> <span className="text-[10px] font-bold text-[#4A4A4A]/40">位登錄成員</span>
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          {registrations.map(reg => (
-                            <div key={reg.id} className="group bg-white p-6 rounded-[28px] border border-[#D2B48C]/10 shadow-sm hover:shadow-md transition-all flex items-center gap-4 overflow-hidden">
-                              <div className="flex flex-1 min-w-0 items-center gap-4 cursor-pointer" onClick={() => setSelectedRegDetails(reg)}>
-                                <div className="w-12 h-12 bg-[#F9F7F2] rounded-2xl flex items-center justify-center text-[#B87333] flex-shrink-0">
-                                  <User size={24} />
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                  <h4 className="font-bold text-[#4A4A4A] truncate text-base">{reg.user_name}</h4>
-                                  <p className="text-[10px] text-[#4A4A4A]/40 font-mono truncate">{reg.email}</p>
-                                </div>
-                              </div>
-                              <div className="flex gap-2 flex-shrink-0">
-                                <button onClick={() => updatePaymentStatus(reg.id, '已付款')} title="標記已付款" className={`w-11 h-11 rounded-2xl transition-all flex items-center justify-center ${reg.payment_status === '已付款' ? 'bg-[#8FBC8F] text-white shadow-lg shadow-green-100' : 'bg-gray-50 text-gray-200 hover:text-[#8FBC8F]'}`}><CheckCircle size={22} /></button>
-                                <button onClick={() => updatePaymentStatus(reg.id, '待付款')} title="標記待付款" className={`w-11 h-11 rounded-2xl transition-all flex items-center justify-center ${reg.payment_status === '待付款' ? 'bg-[#B87333] text-white shadow-lg shadow-orange-100' : 'bg-gray-50 text-gray-200 hover:text-[#B87333]'}`}><Clock size={22} /></button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </>
-                )}
-              </motion.div>
-            ) : (
-              /* 空狀態：顯示佈告欄精華 */
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="h-full max-w-5xl mx-auto flex flex-col pt-12">
-                <div className="mb-20 text-center">
-                  <h2 className="text-6xl font-serif font-bold text-[#4A4A4A] mb-6">歡迎探索本平台</h2>
-                  <p className="text-xl text-[#4A4A4A]/40 font-medium">請從左側列表選取活動，或查看下方最新公告資訊</p>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="flex items-center gap-4 mb-8">
-                    <Bell className="text-[#B87333]" size={32} />
-                    <h3 className="text-3xl font-serif font-bold text-[#4A4A4A]">最新消息</h3>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    {announcements.slice(0, 4).map(ann => (
-                      <motion.div
-                        key={ann.id}
-                        onClick={() => { setView('ann-board'); fetchAnnouncements(); }}
-                        className="bg-white p-8 rounded-[40px] border border-[#D2B48C]/10 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all cursor-pointer relative overflow-hidden"
-                      >
-                        <div className="flex items-center justify-between mb-4">
-                          <span className="text-[10px] font-bold text-[#B87333] uppercase tracking-widest">{ann.date}</span>
-                          <ChevronRight size={16} className="text-[#4A4A4A]/20" />
-                        </div>
-                        <h4 className="text-xl font-bold text-[#4A4A4A] mb-4 truncate">{ann.title}</h4>
-                        <p className="text-sm text-[#4A4A4A]/40 line-clamp-2 leading-relaxed">{ann.content}</p>
-                      </motion.div>
-                    ))}
-                    {announcements.length === 0 && (
-                      <div className="col-span-2 py-16 bg-white/50 rounded-[40px] border-2 border-dashed border-[#D2B48C]/10 flex flex-col items-center justify-center text-[#4A4A4A]/20">
-                        <Megaphone size={48} className="mb-4 opacity-50" />
-                        <p className="font-bold uppercase tracking-widest">目前沒有發佈任何公告</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
+                </form>
               </motion.div>
             )}
           </AnimatePresence>
-        </section>
-      </div>
+        </div>
+      </main >
 
-      {/* Overlays */}
-      <AnimatePresence>
-        {/* Announcement CRUD Form */}
+      {/* Product Form Modal (Simplified) */}
+      < AnimatePresence >
+        {showProductForm && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-zinc-900 p-8 rounded-[40px] w-full max-w-md border border-zinc-800 shadow-2xl">
+              <h3 className="text-2xl font-bold mb-6 text-white text-center">產品資料編輯</h3>
+              <form onSubmit={handleProductSubmit} className="space-y-4">
+                <input placeholder="產品名稱" className="w-full bg-zinc-800 border-none rounded-xl p-4 text-white" value={productFormData.name} onChange={e => setProductFormData({ ...productFormData, name: e.target.value })} />
+                <select className="w-full bg-zinc-800 border-none rounded-xl p-4 text-white" value={productFormData.supplier_id} onChange={e => setProductFormData({ ...productFormData, supplier_id: e.target.value })}>
+                  <option value="">選擇供應商</option>
+                  {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+                <div className="grid grid-cols-2 gap-4 text-white">
+                  <div>
+                    <label className="text-[10px] font-bold uppercase opacity-30 px-1">實體庫存 (倉庫)</label>
+                    <input type="number" className="w-full bg-zinc-800 border-none rounded-xl p-4 mt-1" value={productFormData.stock} onChange={e => setProductFormData({ ...productFormData, stock: parseFloat(e.target.value) })} />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold uppercase opacity-30 px-1">可購庫存 (預扣)</label>
+                    <input type="number" className="w-full bg-zinc-800 border-none rounded-xl p-4 mt-1" value={productFormData.available_stock} onChange={e => setProductFormData({ ...productFormData, available_stock: parseFloat(e.target.value) })} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4 text-white">
+                  <input type="number" placeholder="安全庫存" className="bg-zinc-800 border-none rounded-xl p-4" value={productFormData.safety_stock} onChange={e => setProductFormData({ ...productFormData, safety_stock: parseFloat(e.target.value) })} />
+                  <input placeholder="單位 (斤/盒)" className="bg-zinc-800 border-none rounded-xl p-4" value={productFormData.unit} onChange={e => setProductFormData({ ...productFormData, unit: e.target.value })} />
+                </div>
+                <div className="flex gap-4 pt-4">
+                  <button type="button" onClick={() => setShowProductForm(false)} className="flex-1 py-4 text-zinc-500 font-bold hover:text-white transition-all">取消</button>
+                  <button type="submit" className="flex-1 py-4 bg-orange-600 rounded-2xl font-bold text-white shadow-lg shadow-orange-900/20">儲存產品</button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )
+        }
+
+        {
+          showProfileForm && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+              <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white p-8 rounded-[40px] w-full max-w-md border border-orange-100 shadow-2xl">
+                <h3 className="text-2xl font-bold mb-6 text-orange-800 flex items-center gap-2"><User /> 編輯個人資料</h3>
+                <form onSubmit={handleProfileSubmit} className="space-y-4">
+                  <div>
+                    <label className="text-[10px] font-bold text-orange-300 uppercase mb-2 block tracking-widest">顯示名稱</label>
+                    <input
+                      className="w-full bg-orange-50 border-none rounded-2xl p-4"
+                      value={profileFormData.display_name}
+                      onChange={e => setProfileFormData({ ...profileFormData, display_name: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-orange-300 uppercase mb-2 block tracking-widest">聯絡電話</label>
+                    <input
+                      placeholder="例如: 0912345678"
+                      className="w-full bg-orange-50 border-none rounded-2xl p-4"
+                      value={profileFormData.phone}
+                      onChange={e => setProfileFormData({ ...profileFormData, phone: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-orange-300 uppercase mb-2 block tracking-widest">預設配送地址</label>
+                    <input
+                      placeholder="請輸入完整收件地址"
+                      className="w-full bg-orange-50 border-none rounded-2xl p-4"
+                      value={profileFormData.shipping_address}
+                      onChange={e => setProfileFormData({ ...profileFormData, shipping_address: e.target.value })}
+                    />
+                  </div>
+                  <div className="flex gap-4 pt-4">
+                    <button type="button" onClick={() => setShowProfileForm(false)} className="flex-1 py-4 text-orange-300 font-bold hover:text-orange-500 transition-all">取消</button>
+                    <button type="submit" className="flex-1 py-4 bg-orange-800 rounded-2xl font-bold text-white shadow-lg shadow-orange-900/20">儲存更新</button>
+                  </div>
+                </form>
+              </motion.div>
+            </div>
+          )
+        }
+      </AnimatePresence >
+      {/* Loss Form Modal */}
+      < AnimatePresence >
+        {showLossForm && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-zinc-900 p-8 rounded-[40px] w-full max-w-md border border-zinc-800 shadow-2xl">
+              <h3 className="text-2xl font-bold mb-6 text-white flex items-center gap-2"><Trash2 className="text-red-500" /> 紀錄產品損耗</h3>
+              <p className="text-zinc-500 text-sm mb-6">產品：{products.find(p => p.id === lossFormData.p_id)?.name}</p>
+              <form onSubmit={handleLossSubmit} className="space-y-4">
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase mb-2 block">損耗數量</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    className="w-full bg-zinc-800 border-none rounded-xl p-4"
+                    value={lossFormData.qty}
+                    onChange={e => setLossFormData({ ...lossFormData, qty: parseFloat(e.target.value) })}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase mb-2 block">損耗原因</label>
+                  <select
+                    className="w-full bg-zinc-800 border-none rounded-xl p-4"
+                    value={lossFormData.reason}
+                    onChange={e => setLossFormData({ ...lossFormData, reason: e.target.value })}
+                  >
+                    <option>損毀</option>
+                    <option>過期</option>
+                    <option>遺失</option>
+                    <option>其他</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase mb-2 block">紀錄日期</label>
+                  <input
+                    type="date"
+                    className="w-full bg-zinc-800 border-none rounded-xl p-4"
+                    value={lossFormData.date}
+                    onChange={e => setLossFormData({ ...lossFormData, date: e.target.value })}
+                  />
+                </div>
+                <div className="flex gap-4 pt-4">
+                  <button type="button" onClick={() => setShowLossForm(false)} className="flex-1 py-4 text-zinc-500 font-bold hover:text-white transition-all">取消</button>
+                  <button type="submit" className="flex-1 py-4 bg-red-600 rounded-2xl font-bold text-white shadow-lg shadow-red-900/20">確認扣除庫存</button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence >
+      {/* Announcement Form Modal */}
+      < AnimatePresence >
         {showAnnForm && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40 backdrop-blur-md p-6">
-            <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} className={`w-full max-w-2xl rounded-[48px] shadow-2xl border transition-colors duration-500 overflow-hidden ${isAdminView ? 'bg-[#242421] border-[#363632]' : 'bg-white border-[#D2B48C]/10'}`}>
-              <div className={`p-10 flex items-center justify-between ${isAdminView ? 'bg-[#1A1A17] text-[#F5F5F0]' : 'bg-[#4A4A4A] text-white'}`}>
-                <h3 className="text-3xl font-serif font-bold">{editingAnnId ? '修改公告內容' : '發佈新公告'}</h3>
-                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${isAdminView ? 'bg-[#242421]' : 'bg-white/10'}`}>
-                  <Bell size={24} />
-                </div>
-              </div>
-              <form onSubmit={handleAnnSubmit} className="p-10 space-y-6">
-                <div className="grid grid-cols-2 gap-6">
-                  <div className="space-y-2 col-span-1">
-                    <label className={`text-[10px] font-black uppercase tracking-widest ml-2 ${isAdminView ? 'text-[#A0A095]' : 'text-[#4A4A4A]/40'}`}>發佈日期</label>
-                    <input type="date" value={annFormData.date} required className={`w-full px-6 py-4 rounded-[24px] border-2 border-transparent focus:outline-none focus:bg-white transition-all font-bold font-mono ${isAdminView ? 'bg-[#1A1A17] text-[#F5F5F0] focus:border-stone-700' : 'bg-gray-50 focus:border-indigo-500/20'}`} onChange={e => setAnnFormData({ ...annFormData, date: e.target.value })} />
-                  </div>
-                  <div className="space-y-2 col-span-2">
-                    <label className={`text-[10px] font-black uppercase tracking-widest ml-2 ${isAdminView ? 'text-[#A0A095]' : 'text-[#4A4A4A]/40'}`}>公告標題</label>
-                    <input type="text" placeholder="輸入亮眼的標題..." value={annFormData.title} required className={`w-full px-8 py-4 rounded-[24px] border-2 border-transparent focus:outline-none focus:bg-white transition-all font-bold ${isAdminView ? 'bg-[#1A1A17] text-[#F5F5F0] focus:border-stone-700' : 'bg-gray-50 focus:border-indigo-500/20'}`} onChange={e => setAnnFormData({ ...annFormData, title: e.target.value })} />
-                  </div>
-                  <div className="space-y-2 col-span-2">
-                    <label className={`text-[10px] font-black uppercase tracking-widest ml-2 ${isAdminView ? 'text-[#A0A095]' : 'text-[#4A4A4A]/40'}`}>連結至特定活動 (可選)</label>
-                    <select
-                      value={annFormData.event_link_id || ''}
-                      className={`w-full px-8 py-4 rounded-[24px] border-2 border-transparent focus:outline-none focus:bg-white transition-all font-bold ${isAdminView ? 'bg-[#1A1A17] text-[#F5F5F0] focus:border-stone-700' : 'bg-gray-50 focus:border-indigo-500/20'}`}
-                      onChange={e => setAnnFormData({ ...annFormData, event_link_id: e.target.value || null })}
-                    >
-                      <option value="">無連結</option>
-                      {events.map(e => (
-                        <option key={e.id} value={e.id}>{e.name} ({new Date(e.date).toLocaleDateString()})</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <label className={`text-[10px] font-black uppercase tracking-widest ml-2 ${isAdminView ? 'text-[#A0A095]' : 'text-[#4A4A4A]/40'}`}>詳細內容</label>
-                  <textarea rows={8} placeholder="描述公告詳情..." value={annFormData.content} required className={`w-full px-8 py-6 rounded-[32px] border-2 border-transparent focus:outline-none focus:bg-white transition-all font-bold resize-none ${isAdminView ? 'bg-[#1A1A17] text-[#F5F5F0] focus:border-stone-700' : 'bg-gray-50 focus:border-indigo-500/20'}`} onChange={e => setAnnFormData({ ...annFormData, content: e.target.value })} />
-                </div>
-                <div className="flex gap-4 pt-6">
-                  <button type="button" onClick={() => setShowAnnForm(false)} className={`flex-1 py-4 font-bold rounded-2xl transition-colors ${isAdminView ? 'text-[#A0A095] hover:bg-[#1A1A17]' : 'text-[#4A4A4A]/40 hover:bg-gray-50'}`}>取消</button>
-                  <button type="submit" className={`flex-[2] py-4 rounded-[32px] text-lg font-bold shadow-xl transition-all ${isAdminView ? 'bg-[#F5F5F0] text-[#1A1A17] hover:bg-white' : 'bg-[#4A4A4A] text-white hover:bg-black'}`}>立即儲存公告</button>
-                </div>
-              </form>
-            </motion.div>
-          </motion.div>
-        )}
-
-        {/* Event CRUD Form */}
-        {showEventForm && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40 backdrop-blur-md p-6">
-            <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} className={`w-full max-w-2xl rounded-[48px] shadow-2xl border transition-colors duration-500 overflow-hidden ${isAdminView ? 'bg-[#242421] border-[#363632]' : 'bg-white border-[#D2B48C]/10'}`}>
-              <div className={`p-10 flex items-center justify-between ${isAdminView ? 'bg-[#1A1A17] text-[#F5F5F0]' : 'bg-[#4A4A4A] text-white'}`}>
-                <h3 className="text-3xl font-serif font-bold">{editingEventId ? '修改活動資訊' : '發佈新活動'}</h3>
-                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${isAdminView ? 'bg-[#242421]' : 'bg-white/10'}`}>
-                  <Calendar size={24} />
-                </div>
-              </div>
-              <form onSubmit={handleEventSubmit} className="p-10 space-y-6">
-                <div className="grid grid-cols-2 gap-6">
-                  <div className="space-y-2 col-span-2">
-                    <label className={`text-[10px] font-black uppercase tracking-widest ml-2 ${isAdminView ? 'text-[#A0A095]' : 'text-[#4A4A4A]/40'}`}>活動名稱</label>
-                    <input type="text" placeholder="輸入活動名稱..." value={eventFormData.name} required className={`w-full px-8 py-4 rounded-[24px] border-2 border-transparent focus:outline-none focus:bg-white transition-all font-bold ${isAdminView ? 'bg-[#1A1A17] text-[#F5F5F0] focus:border-stone-700' : 'bg-gray-50 focus:border-indigo-500/20'}`} onChange={e => setEventFormData({ ...eventFormData, name: e.target.value })} />
-                  </div>
-                  <div className="space-y-2 col-span-1">
-                    <label className={`text-[10px] font-black uppercase tracking-widest ml-2 ${isAdminView ? 'text-[#A0A095]' : 'text-[#4A4A4A]/40'}`}>活動日期與時間</label>
-                    <input type="datetime-local" value={eventFormData.date} required className={`w-full px-6 py-4 rounded-[24px] border-2 border-transparent focus:outline-none focus:bg-white transition-all font-bold font-mono ${isAdminView ? 'bg-[#1A1A17] text-[#F5F5F0] focus:border-stone-700' : 'bg-gray-50 focus:border-indigo-500/20'}`} onChange={e => setEventFormData({ ...eventFormData, date: e.target.value })} />
-                  </div>
-                  <div className="space-y-2 col-span-1">
-                    <label className={`text-[10px] font-black uppercase tracking-widest ml-2 ${isAdminView ? 'text-[#A0A095]' : 'text-[#4A4A4A]/40'}`}>報名費用 (TWD)</label>
-                    <input type="number" placeholder="0" value={eventFormData.amount} required className={`w-full px-8 py-4 rounded-[24px] border-2 border-transparent focus:outline-none focus:bg-white transition-all font-bold ${isAdminView ? 'bg-[#1A1A17] text-[#F5F5F0] focus:border-stone-700' : 'bg-gray-50 focus:border-indigo-500/20'}`} onChange={e => setEventFormData({ ...eventFormData, amount: parseFloat(e.target.value) })} />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className={`text-[10px] font-black uppercase tracking-widest ml-2 ${isAdminView ? 'text-[#A0A095]' : 'text-[#4A4A4A]/40'}`}>催繳執行日期</label>
-                    <input
-                      type="date"
-                      value={eventFormData.reminder_date}
-                      className={`w-full px-8 py-4 rounded-[24px] border-2 border-transparent focus:outline-none focus:bg-white transition-all font-bold ${isAdminView ? 'bg-[#1A1A17] text-[#F5F5F0] focus:border-stone-700' : 'bg-gray-50 focus:border-indigo-500/20'}`}
-                      onChange={e => setEventFormData({ ...eventFormData, reminder_date: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className={`text-[10px] font-black uppercase tracking-widest ml-2 ${isAdminView ? 'text-[#A0A095]' : 'text-[#4A4A4A]/40'}`}>最後繳費截止日</label>
-                    <input
-                      type="date"
-                      value={eventFormData.reminder_deadline}
-                      className={`w-full px-8 py-4 rounded-[24px] border-2 border-transparent focus:outline-none focus:bg-white transition-all font-bold ${isAdminView ? 'bg-[#1A1A17] text-[#F5F5F0] focus:border-stone-700' : 'bg-gray-50 focus:border-indigo-500/20'}`}
-                      onChange={e => setEventFormData({ ...eventFormData, reminder_deadline: e.target.value })}
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <label className={`text-[10px] font-black uppercase tracking-widest ml-2 ${isAdminView ? 'text-[#A0A095]' : 'text-[#4A4A4A]/40'}`}>活動介紹</label>
-                  <textarea rows={6} placeholder="描述活動詳情..." value={eventFormData.description} className={`w-full px-8 py-6 rounded-[32px] border-2 border-transparent focus:outline-none focus:bg-white transition-all font-bold resize-none ${isAdminView ? 'bg-[#1A1A17] text-[#F5F5F0] focus:border-stone-700' : 'bg-gray-50 focus:border-indigo-500/20'}`} onChange={e => setEventFormData({ ...eventFormData, description: e.target.value })} />
-                </div>
-                <div className="flex gap-4 pt-6">
-                  <button type="button" onClick={() => setShowEventForm(false)} className={`flex-1 py-4 font-bold rounded-2xl transition-colors ${isAdminView ? 'text-[#A0A095] hover:bg-[#1A1A17]' : 'text-[#4A4A4A]/40 hover:bg-gray-50'}`}>取消</button>
-                  <button type="submit" className={`flex-[2] py-4 rounded-[32px] text-lg font-bold shadow-xl transition-all ${isAdminView ? 'bg-[#F5F5F0] text-[#1A1A17] hover:bg-white' : 'bg-[#4A4A4A] text-white hover:bg-black'}`}>儲存活動資訊</button>
-                </div>
-              </form>
-            </motion.div>
-          </motion.div>
-        )}
-
-        {/* Wish Form (許願池) */}
-        {showWishForm && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[110] flex items-center justify-center bg-black/30 backdrop-blur-md p-6">
-            <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} className="bg-white w-full max-w-xl rounded-[48px] shadow-2xl border border-[#D2B48C]/10 overflow-hidden">
-              <div className="bg-[#B87333] p-10 text-white flex items-center justify-between">
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-zinc-900 p-8 rounded-[40px] w-full max-w-lg border border-zinc-800 shadow-2xl">
+              <h3 className="text-2xl font-bold mb-6 text-white text-center">{editingAnnId ? '編輯公告' : '發布全站公告'}</h3>
+              <form onSubmit={handleAnnSubmit} className="space-y-4">
                 <div>
-                  <h3 className="text-3xl font-serif font-bold">投遞心願到許願池</h3>
-                  <p className="text-white/60 text-xs mt-1 uppercase tracking-widest font-bold">Wishing Well Entry</p>
-                </div>
-                <div className="w-16 h-16 bg-white/20 rounded-3xl flex items-center justify-center">
-                  <Sparkles size={32} />
-                </div>
-              </div>
-              <form onSubmit={handleWishSubmit} className="p-10 space-y-8">
-                <div className="space-y-4">
-                  <label className="text-[10px] font-black text-[#4A4A4A]/40 uppercase tracking-widest ml-2">我想提交...</label>
-                  <div className="flex gap-3">
-                    {['活動希望', '改善建議'].map(cat => (
-                      <button
-                        key={cat}
-                        type="button"
-                        onClick={() => setWishFormData({ ...wishFormData, category: cat })}
-                        className={`flex-1 py-4 rounded-2xl font-bold transition-all border-2 ${wishFormData.category === cat ? 'bg-[#4A4A4A] border-[#4A4A4A] text-white shadow-lg' : 'bg-gray-50 border-transparent text-[#4A4A4A]/40 hover:bg-white hover:border-gray-200'}`}
-                      >
-                        {cat}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-[#4A4A4A]/40 uppercase tracking-widest ml-2">願望內容</label>
-                  <textarea
-                    rows={6}
-                    placeholder={wishFormData.category === '活動希望' ? "希望能舉辦什麼樣的活動呢？" : "有哪些地方我們可以做得更好？"}
-                    value={wishFormData.content}
+                  <label className="text-[10px] font-bold uppercase opacity-30 px-1">公告標題</label>
+                  <input
+                    placeholder="例如：春節連假出貨通知"
+                    className="w-full bg-zinc-800 border-none rounded-2xl p-4 text-white mt-1 border border-zinc-700 focus:ring-2 focus:ring-orange-500 transition-all"
+                    value={annFormData.title}
+                    onChange={e => setAnnFormData({ ...annFormData, title: e.target.value })}
                     required
-                    className="w-full px-8 py-6 rounded-[32px] bg-gray-50 border-2 border-transparent focus:border-[#B87333]/20 focus:outline-none focus:bg-white transition-all font-bold resize-none"
-                    onChange={e => setWishFormData({ ...wishFormData, content: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold uppercase opacity-30 px-1">公告日期</label>
+                  <input
+                    type="date"
+                    className="w-full bg-zinc-800 border-none rounded-2xl p-4 text-white mt-1 border border-zinc-700 focus:ring-2 focus:ring-orange-500 transition-all"
+                    value={annFormData.date}
+                    onChange={e => setAnnFormData({ ...annFormData, date: e.target.value })}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold uppercase opacity-30 px-1">公告內容</label>
+                  <textarea
+                    placeholder="請輸入詳盡的公告內容..."
+                    className="w-full bg-zinc-800 border-none rounded-2xl p-4 text-white h-32 mt-1 border border-zinc-700 focus:ring-2 focus:ring-orange-500 transition-all"
+                    value={annFormData.content}
+                    onChange={e => setAnnFormData({ ...annFormData, content: e.target.value })}
+                    required
                   />
                 </div>
                 <div className="flex gap-4 pt-4">
-                  <button type="button" onClick={() => setShowWishForm(false)} className="flex-1 py-4 font-bold text-[#4A4A4A]/40">取消</button>
-                  <button type="submit" className="flex-[2] bg-[#B87333] text-white py-4 rounded-[32px] text-lg font-bold shadow-xl shadow-orange-100 hover:bg-[#a0632b] transition-all">投遞願望</button>
-                </div>
-              </form>
-            </motion.div>
-          </motion.div>
-        )}
-
-        {/* Registration Form */}
-        {showRegForm && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex items-center justify-center bg-[#4A4A4A]/20 backdrop-blur-md p-6">
-            <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} className="bg-white w-full max-w-lg rounded-[48px] shadow-2xl border border-[#D2B48C]/20 overflow-hidden">
-              <div className="bg-[#F9F7F2] p-10 text-center border-b border-[#D2B48C]/10">
-                <h3 className="text-3xl font-serif font-bold text-[#4A4A4A]">參與資料登記</h3>
-                <p className="text-sm text-[#4A4A4A]/50 mt-2 italic">{selectedEvent?.name}</p>
-              </div>
-              <form onSubmit={handleRegisterSubmit} className="p-10 space-y-8">
-                <div className="space-y-2 px-2">
-                  <div className="flex justify-between items-center">
-                    <label className="text-[10px] font-black text-[#4A4A4A]/40 uppercase tracking-widest">姓名</label>
-                    {currentUserProfile?.display_name && (
-                      <span className="text-[9px] font-bold text-[#8FBC8F] bg-[#8FBC8F]/5 px-2 py-0.5 rounded-md">引自個人檔案</span>
-                    )}
-                  </div>
-                  <input
-                    type="text"
-                    value={regFormData.user_name}
-                    required
-                    disabled={!!currentUserProfile?.display_name}
-                    className={`w-full px-6 py-4 rounded-[20px] border-2 border-transparent transition-all font-bold ${currentUserProfile?.display_name ? 'bg-gray-50 text-[#4A4A4A]/30 cursor-not-allowed' : 'bg-[#F9F7F2]/60 focus:border-[#8FBC8F]/20 focus:outline-none focus:bg-white'}`}
-                    onChange={e => setRegFormData({ ...regFormData, user_name: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2 px-2">
-                  <div className="flex justify-between items-center">
-                    <label className="text-[10px] font-black text-[#4A4A4A]/40 uppercase tracking-widest">生日</label>
-                    {currentUserProfile?.birthday && (
-                      <span className="text-[9px] font-bold text-[#8FBC8F] bg-[#8FBC8F]/5 px-2 py-0.5 rounded-md">引自個人檔案</span>
-                    )}
-                  </div>
-                  <input
-                    type="date"
-                    value={regFormData.birthday}
-                    required
-                    disabled={!!currentUserProfile?.birthday}
-                    className={`w-full px-6 py-4 rounded-[20px] border-2 border-transparent transition-all font-bold ${currentUserProfile?.birthday ? 'bg-gray-50 text-[#4A4A4A]/30 cursor-not-allowed' : 'bg-[#F9F7F2]/60 focus:border-[#8FBC8F]/20 focus:outline-none focus:bg-white'}`}
-                    onChange={e => setRegFormData({ ...regFormData, birthday: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-6">
-                  {/* 人數選擇 */}
-                  <div className="space-y-2 px-2">
-                    <label className="text-[10px] font-black text-[#4A4A4A]/40 uppercase tracking-widest">參加人數</label>
-                    <div className="flex items-center gap-6">
-                      <div className="flex items-center bg-[#F9F7F2]/60 rounded-[24px] p-1 border-2 border-transparent">
-                        <button
-                          type="button"
-                          onClick={() => setRegFormData({ ...regFormData, participant_count: Math.max(1, regFormData.participant_count - 1) })}
-                          className="w-12 h-12 rounded-[20px] flex items-center justify-center text-[#4A4A4A]/40 hover:bg-white hover:text-[#8FBC8F] transition-all hover:shadow-sm"
-                        >
-                          <Minus size={20} />
-                        </button>
-                        <div className="w-16 text-center">
-                          <span className="text-2xl font-serif font-bold text-[#4A4A4A]">{regFormData.participant_count}</span>
-                          <span className="text-[10px] font-bold text-[#4A4A4A]/40 ml-1">人</span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setRegFormData({ ...regFormData, participant_count: Math.min(10, regFormData.participant_count + 1) })}
-                          className="w-12 h-12 rounded-[20px] flex items-center justify-center text-[#4A4A4A]/40 hover:bg-white hover:text-[#8FBC8F] transition-all hover:shadow-sm"
-                        >
-                          <Plus size={20} />
-                        </button>
-                      </div>
-                      <div className="flex-1 bg-[#8FBC8F]/5 border border-[#8FBC8F]/10 rounded-2xl px-6 py-3 flex justify-between items-center">
-                        <span className="text-[10px] text-[#4A4A4A]/40 font-bold uppercase tracking-widest">總額試算</span>
-                        <span className="text-2xl font-serif font-bold text-[#B87333]">${selectedEvent.amount * regFormData.participant_count}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 備註需求 */}
-                  <div className="space-y-2 px-2">
-                    <label className="text-[10px] font-black text-[#4A4A4A]/40 uppercase tracking-widest">需求備註 (選填)</label>
-                    <textarea
-                      placeholder="例如：有小孩同行、素食需求等..."
-                      value={regFormData.notes}
-                      className="w-full px-6 py-4 rounded-[20px] bg-[#F9F7F2]/60 border-2 border-transparent focus:border-[#8FBC8F]/20 focus:outline-none focus:bg-white transition-all font-bold min-h-[120px] resize-none"
-                      onChange={e => setRegFormData({ ...regFormData, notes: e.target.value })}
-                    />
-                  </div>
-                </div>
-
-                {(currentUserProfile?.display_name || currentUserProfile?.birthday) && (
-                  <div className="px-4 py-3 bg-amber-50 rounded-2xl border border-amber-100 flex items-start gap-3">
-                    <Info size={16} className="text-amber-600 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <p className="text-[11px] text-amber-800 font-bold leading-relaxed">
-                        您的部分報名資訊已鎖定。如需修改，請先前往
-                        <button
-                          type="button"
-                          onClick={() => { setShowRegForm(false); setShowProfileEdit(true); }}
-                          className="mx-1 text-amber-600 border-b border-amber-600 hover:text-amber-700 transition-colors"
-                        >
-                          個人檔案設定
-                        </button>
-                        更新資料。
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                <div className="flex gap-4 pt-4">
-                  <button type="button" onClick={() => setShowRegForm(false)} className="flex-1 px-8 py-4 rounded-[20px] font-bold text-[#4A4A4A]/40 hover:bg-gray-50">放棄填寫</button>
-                  <button type="submit" className="flex-[2] bg-[#8FBC8F] text-white py-4 rounded-[20px] text-lg font-bold shadow-xl shadow-green-100 hover:bg-[#76a076] transition-all">確認送出報名</button>
-                </div>
-              </form>
-            </motion.div>
-          </motion.div>
-        )}
-
-        {/* Profile Edit Modal */}
-        {showProfileEdit && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[101] flex items-center justify-center bg-[#4A4A4A]/30 backdrop-blur-md p-6">
-            <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} className="bg-white w-full max-w-md rounded-[48px] shadow-2xl border border-[#D2B48C]/20 overflow-hidden">
-              <div className="bg-[#B87333]/5 p-10 text-center border-b border-[#D2B48C]/10">
-                <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-[#B87333] shadow-sm mx-auto mb-4 border border-[#D2B48C]/10">
-                  <Settings size={28} />
-                </div>
-                <h3 className="text-2xl font-serif font-bold text-[#4A4A4A]">個人基本資料</h3>
-              </div>
-              <form onSubmit={handleProfileUpdate} className="p-10 space-y-6">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-[#4A4A4A]/40 uppercase tracking-widest ml-2">顯示姓名</label>
-                  <input
-                    type="text"
-                    value={profileFormData.display_name}
-                    required
-                    className="w-full px-6 py-4 rounded-[24px] bg-gray-50 border-2 border-transparent focus:border-[#8FBC8F]/20 focus:outline-none focus:bg-white transition-all font-bold"
-                    onChange={e => setProfileFormData({ ...profileFormData, display_name: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-[#4A4A4A]/40 uppercase tracking-widest ml-2">預設生日</label>
-                  <input
-                    type="date"
-                    value={profileFormData.birthday}
-                    className="w-full px-6 py-4 rounded-[24px] bg-gray-50 border-2 border-transparent focus:border-[#8FBC8F]/20 focus:outline-none focus:bg-white transition-all font-bold"
-                    onChange={e => setProfileFormData({ ...profileFormData, birthday: e.target.value })}
-                  />
-                </div>
-                <div className="flex gap-4 pt-6">
-                  <button type="button" onClick={() => setShowProfileEdit(false)} className="flex-1 py-4 font-bold text-[#4A4A4A]/30">取消</button>
-                  <button type="submit" className="flex-[2] bg-[#4A4A4A] text-white py-4 rounded-[24px] font-bold shadow-lg hover:bg-black transition-all">更新並同步</button>
-                </div>
-              </form>
-            </motion.div>
-          </motion.div>
-        )}
-
-        {/* Admin Detail Modal */}
-        {selectedRegDetails && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[101] flex items-center justify-center bg-[#4A4A4A]/20 backdrop-blur-md p-6">
-            <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} className="bg-white w-full max-w-md rounded-[48px] shadow-2xl border border-[#D2B48C]/20 overflow-hidden">
-              <div className="bg-stone-50 p-8 flex items-center gap-4 border-b border-stone-100">
-                <div className="w-16 h-16 bg-white rounded-3xl flex items-center justify-center text-[#8FBC8F] shadow-sm border border-stone-100">
-                  <Info size={32} />
-                </div>
-                <div>
-                  <h3 className="text-2xl font-serif font-bold text-[#4A4A4A]">報名紀錄彙整</h3>
-                  <p className="text-[10px] font-bold text-[#4A4A4A]/40 uppercase tracking-widest mt-1">Ref ID: {selectedRegDetails.id}</p>
-                </div>
-              </div>
-              <div className="p-8 space-y-6">
-                <div className="space-y-4">
-                  <div className="flex items-center gap-4 bg-[#F9F7F2]/50 p-4 rounded-[24px]">
-                    <User className="text-[#B87333] flex-shrink-0" size={20} />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[10px] font-bold uppercase text-[#4A4A4A]/40">姓名</p>
-                      <p className="font-bold text-[#4A4A4A] truncate">{selectedRegDetails.user_name}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-4 bg-[#F9F7F2]/50 p-4 rounded-[24px]">
-                    <Mail className="text-[#B87333] flex-shrink-0" size={20} />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[10px] font-black uppercase text-[#4A4A4A]/40">電郵</p>
-                      <p className="font-bold text-[#4A4A4A] text-sm font-mono truncate">{selectedRegDetails.email}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-4 bg-[#F9F7F2]/50 p-4 rounded-[24px]">
-                    <Gift className="text-[#B87333] flex-shrink-0" size={20} />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[10px] font-black uppercase text-[#4A4A4A]/40">生日紀錄</p>
-                      <p className="font-bold text-[#4A4A4A] truncate">{selectedRegDetails.birthday}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-4 bg-[#F9F7F2]/50 p-4 rounded-[24px]">
-                    <Users className="text-[#B87333] mt-1 flex-shrink-0" size={20} />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[10px] font-black uppercase text-[#4A4A4A]/40">參加人數</p>
-                      <p className="font-bold text-[#4A4A4A]">{selectedRegDetails.participant_count} 人</p>
-                    </div>
-                  </div>
-                  {selectedRegDetails.notes && (
-                    <div className="flex items-start gap-4 bg-[#F9F7F2]/50 p-4 rounded-[24px]">
-                      <MessageSquare className="text-[#B87333] mt-1 flex-shrink-0" size={20} />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[10px] font-black uppercase text-[#4A4A4A]/40">需求備註</p>
-                        <p className="text-sm font-medium text-[#4A4A4A] leading-relaxed break-words">{selectedRegDetails.notes}</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-                <div className="flex gap-2">
-                  <button onClick={() => updatePaymentStatus(selectedRegDetails.id, '已付款')} className={`flex-1 py-4 rounded-[20px] flex items-center justify-center gap-2 font-bold transition-all ${selectedRegDetails.payment_status === '已付款' ? 'bg-[#8FBC8F] text-white shadow-lg shadow-green-100' : 'bg-gray-50 text-[#4A4A4A]/40 hover:bg-gray-100'}`}>已付款</button>
-                  <button onClick={() => updatePaymentStatus(selectedRegDetails.id, '待付款')} className={`flex-1 py-4 rounded-[20px] flex items-center justify-center gap-2 font-bold transition-all ${selectedRegDetails.payment_status === '待付款' ? 'bg-[#B87333] text-white shadow-lg shadow-orange-100' : 'bg-gray-50 text-[#4A4A4A]/40 hover:bg-gray-100'}`}>待付款</button>
-                </div>
-                <button onClick={() => setSelectedRegDetails(null)} className="w-full py-4 text-[#4A4A4A]/20 font-bold hover:text-[#4A4A4A] transition-colors">取消並返回</button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-
-        {/* Marketing Mail Form Modal */}
-        {showMarketingForm && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[101] flex items-center justify-center bg-[#11110F]/60 backdrop-blur-md p-6">
-            <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} className="bg-[#1A1A17] w-full max-w-xl rounded-[48px] shadow-2xl border border-[#363632] overflow-hidden">
-              <div className="bg-[#242421] p-10 text-center border-b border-[#363632]">
-                <div className="w-16 h-16 bg-pink-500/10 rounded-2xl flex items-center justify-center text-pink-400 mx-auto mb-4">
-                  <Mail size={28} />
-                </div>
-                <h3 className="text-2xl font-serif font-bold text-[#F5F5F0]">
-                  {editingMarketingId ? "編輯行銷郵件排程" : "建立行銷郵件排程"}
-                </h3>
-                <p className="text-[10px] text-pink-400 font-bold uppercase tracking-widest mt-2 px-3 py-1 bg-pink-500/5 rounded-full inline-block">發送對象：全體好顧客 (VIP)</p>
-              </div>
-              <form onSubmit={handleMarketingSubmit} className="p-10 space-y-6">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-[#A0A095] uppercase tracking-widest ml-2">郵件主旨</label>
-                  <input
-                    type="text"
-                    placeholder="例如：【快閃特惠】中秋限定活動開跑！"
-                    value={marketingFormData.subject}
-                    required
-                    className="w-full px-6 py-4 rounded-[24px] bg-[#242421] border-2 border-transparent text-[#F5F5F0] focus:border-pink-500/20 focus:outline-none transition-all font-bold placeholder:text-[#A0A095]/30"
-                    onChange={e => setMarketingFormData({ ...marketingFormData, subject: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-[#A0A095] uppercase tracking-widest ml-2">行銷內容</label>
-                  <textarea
-                    placeholder="請輸入郵件內容..."
-                    value={marketingFormData.content}
-                    required
-                    className="w-full px-6 py-4 rounded-[24px] bg-[#242421] border-2 border-transparent text-[#F5F5F0] focus:border-pink-500/20 focus:outline-none transition-all font-bold min-h-[160px] resize-none placeholder:text-[#A0A095]/30"
-                    onChange={e => setMarketingFormData({ ...marketingFormData, content: e.target.value })}
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-[#A0A095] uppercase tracking-widest ml-2">預約排程日期</label>
-                    <input
-                      type="date"
-                      value={marketingFormData.scheduled_date}
-                      required
-                      className="w-full px-6 py-4 rounded-[24px] bg-[#242421] border-2 border-transparent text-[#F5F5F0] focus:border-pink-500/20 focus:outline-none transition-all font-bold"
-                      onChange={e => setMarketingFormData({ ...marketingFormData, scheduled_date: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-[#A0A095] uppercase tracking-widest ml-2">發送時間</label>
-                    <input
-                      type="time"
-                      value={marketingFormData.scheduled_time}
-                      required
-                      className="w-full px-6 py-4 rounded-[24px] bg-[#242421] border-2 border-transparent text-[#F5F5F0] focus:border-pink-500/20 focus:outline-none transition-all font-bold"
-                      onChange={e => setMarketingFormData({ ...marketingFormData, scheduled_time: e.target.value })}
-                    />
-                  </div>
-                </div>
-                <div className="flex gap-4 pt-6">
-                  <button type="button" onClick={() => setShowMarketingForm(false)} className="flex-1 py-4 font-bold text-[#A0A095]">取消</button>
-                  <button type="submit" className="flex-[2] bg-pink-600 text-white py-4 rounded-[24px] font-bold shadow-lg shadow-pink-900/20 hover:bg-pink-500 transition-all">
-                    {editingMarketingId ? "確認修改" : "儲存並預約發送"}
+                  <button type="button" onClick={() => setShowAnnForm(false)} className="flex-1 py-4 text-zinc-500 font-bold hover:text-white transition-all">取消</button>
+                  <button type="submit" className="flex-1 py-4 bg-orange-600 rounded-2xl font-bold text-white shadow-lg shadow-orange-900/20">
+                    {editingAnnId ? '更新公告' : '立即發布'}
                   </button>
                 </div>
               </form>
             </motion.div>
-          </motion.div>
+          </div>
         )}
-      </AnimatePresence>
+      </AnimatePresence >
     </div >
   );
 }
